@@ -1,0 +1,39 @@
+# Xcode
+DerivedData/
+build/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+xcuserdata/
+*.xcuserstate
+*.xccheckout
+*.xcscmblueprint
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# macOS
+.DS_Store
+
+# Local secrets and environment files
+.env
+.env.*
+!.env.example
+*.secret
+*.secrets
+Secrets.*
+secrets.*
+Config/Secrets.*
+*.p12
+*.mobileprovision
+*.cer
+
+# LOCKED IN backups / exported personal data
+LockedIn-Latest.json
+LockedIn-Backup-*.json
+LockedIn-*.json
+*.ipa
+
+# Temporary files
+*.tmp
+*.log
