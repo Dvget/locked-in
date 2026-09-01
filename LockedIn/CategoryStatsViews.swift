@@ -316,19 +316,35 @@ struct RunStatsDetailView: View {
     @Query(sort: \RunRecord.date) private var runs: [RunRecord]
     @State private var showAdd = false
 
-    private var validRuns: [RunRecord] { runs.filter { $0.distanceKm > 0 && $0.durationSeconds > 0 } }
+    private var validRuns: [RunRecord] {
+        runs.filter { !$0.isHidden && $0.distanceKm > 0 && $0.durationSeconds > 0 }
+    }
+
+    private var last30Days: [RunRecord] {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        guard let cutoff = calendar.date(byAdding: .day, value: -29, to: today) else { return validRuns }
+        return validRuns.filter { $0.date >= cutoff && $0.date <= Date() }
+    }
+
     private var totalDistance: Double { validRuns.reduce(0) { $0 + $1.distanceKm } }
     private var totalDuration: Double { validRuns.reduce(0) { $0 + $1.durationSeconds } }
     private var averageDistance: Double { validRuns.isEmpty ? 0 : totalDistance / Double(validRuns.count) }
     private var weightedPace: Double { totalDistance > 0 ? totalDuration / totalDistance : 0 }
+
+    private var distance30: Double { last30Days.reduce(0) { $0 + $1.distanceKm } }
+    private var duration30: Double { last30Days.reduce(0) { $0 + $1.durationSeconds } }
+    private var averageDistance30: Double { last30Days.isEmpty ? 0 : distance30 / Double(last30Days.count) }
+    private var weightedPace30: Double { distance30 > 0 ? duration30 / distance30 : 0 }
+
     private var progressPoints: [RunProgressMetric.Point] { RunProgressMetric.points(for: validRuns) }
     private var latestOverall: Double? { progressPoints.last?.overallIndex }
     private var overallChange: Double? { RunProgressMetric.changeFromBaseline(for: validRuns) }
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 9) {
             LockedCard {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 7) {
                     HStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("LAUFENTWICKLUNG")
@@ -353,35 +369,72 @@ struct RunStatsDetailView: View {
                         Text("Sobald Läufe vorhanden sind, erscheinen hier Distanz, Pace und Gesamtentwicklung.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, minHeight: 150, alignment: .center)
+                            .frame(maxWidth: .infinity, minHeight: 135, alignment: .center)
                     } else {
                         Chart {
                             ForEach(progressPoints, id: \.date) { point in
-                                LineMark(x: .value("Datum", point.date), y: .value("Distanz", point.distanceIndex), series: .value("Metrik", "Distanz"))
-                                    .foregroundStyle(by: .value("Metrik", "Distanz"))
-                                LineMark(x: .value("Datum", point.date), y: .value("Pace", point.paceIndex), series: .value("Metrik", "Pace"))
-                                    .foregroundStyle(by: .value("Metrik", "Pace"))
-                                LineMark(x: .value("Datum", point.date), y: .value("Gesamt", point.overallIndex), series: .value("Metrik", "Gesamt"))
-                                    .foregroundStyle(by: .value("Metrik", "Gesamt"))
-                                    .lineStyle(StrokeStyle(lineWidth: 3))
+                                LineMark(
+                                    x: .value("Datum", point.date),
+                                    y: .value("Gesamt", point.overallIndex)
+                                )
+                                .foregroundStyle(Color.lockedGreen)
+                                .lineStyle(StrokeStyle(lineWidth: 3.2))
+
+                                LineMark(
+                                    x: .value("Datum", point.date),
+                                    y: .value("Distanz", point.distanceIndex)
+                                )
+                                .foregroundStyle(Color.white.opacity(0.48))
+                                .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [7, 5]))
+
+                                LineMark(
+                                    x: .value("Datum", point.date),
+                                    y: .value("Pace", point.paceIndex)
+                                )
+                                .foregroundStyle(Color.white.opacity(0.30))
+                                .lineStyle(StrokeStyle(lineWidth: 1.25, dash: [2, 5]))
                             }
                         }
                         .chartYScale(domain: .automatic(includesZero: false))
-                        .chartLegend(position: .bottom, alignment: .leading)
-                        .frame(height: 210)
+                        .chartLegend(.hidden)
+                        .frame(height: 185)
+
+                        HStack(spacing: 16) {
+                            legendItem("Gesamt", color: Color.lockedGreen, width: 3.2, dash: [])
+                            legendItem("Distanz", color: Color.white.opacity(0.48), width: 1.5, dash: [7, 5])
+                            legendItem("Pace", color: Color.white.opacity(0.30), width: 1.25, dash: [2, 5])
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     }
                 }
             }
 
             LockedCard {
-                VStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("LETZTE 30 TAGE")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color.lockedGreen)
+
+                    HStack(alignment: .top) {
+                        metric("LÄUFE", last30Days.count.formatted())
+                        Spacer()
+                        metric("Ø DISTANZ", averageDistance30 > 0 ? "\(averageDistance30.cleanWeight) km" : "—")
+                        Spacer()
+                        metric("Ø PACE", weightedPace30 > 0 ? "\(formatPace(weightedPace30)) /km" : "—")
+                    }
+
+                    Divider().overlay(Color.lockedBorder)
+
+                    Text("GESAMT")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+
                     HStack {
                         metric("LÄUFE", validRuns.count.formatted())
                         Spacer()
-                        metric("GESAMTDISTANZ", totalDistance > 0 ? "\(totalDistance.cleanWeight) km" : "—")
-                    }
-                    Divider().overlay(Color.lockedBorder)
-                    HStack {
+                        metric("DISTANZ", totalDistance > 0 ? "\(totalDistance.cleanWeight) km" : "—")
+                        Spacer()
                         metric("Ø DISTANZ", averageDistance > 0 ? "\(averageDistance.cleanWeight) km" : "—")
                         Spacer()
                         metric("Ø PACE", weightedPace > 0 ? "\(formatPace(weightedPace)) /km" : "—")
@@ -396,7 +449,7 @@ struct RunStatsDetailView: View {
                     Label("Einzelwerte", systemImage: "list.bullet")
                         .font(.headline)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 50)
+                        .frame(height: 48)
                 }
                 .buttonStyle(LockedActionButtonStyle())
 
@@ -406,7 +459,7 @@ struct RunStatsDetailView: View {
                     Label("Lauf nachtragen", systemImage: "plus")
                         .font(.headline)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 50)
+                        .frame(height: 48)
                 }
                 .buttonStyle(LockedActionButtonStyle(prominent: true))
             }
@@ -414,7 +467,7 @@ struct RunStatsDetailView: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.vertical, 8)
         .background(Color.black)
         .navigationTitle("Läufe")
         .sheet(isPresented: $showAdd) { ManualRunEntryView() }
@@ -422,9 +475,18 @@ struct RunStatsDetailView: View {
     }
 
     private func metric(_ title: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 2) {
             Text(title).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
-            Text(value).font(.headline.bold().monospacedDigit())
+            Text(value).font(.subheadline.bold().monospacedDigit())
+        }
+    }
+
+    private func legendItem(_ title: String, color: Color, width: CGFloat, dash: [CGFloat]) -> some View {
+        HStack(spacing: 5) {
+            Rectangle()
+                .stroke(color, style: StrokeStyle(lineWidth: width, dash: dash))
+                .frame(width: 22, height: 2)
+            Text(title)
         }
     }
 
@@ -581,8 +643,14 @@ struct StepStatsDetailView: View {
 
                             if selectedRange == .week || selectedRange == .month {
                                 RuleMark(y: .value("Ziel", 10_000))
-                                    .foregroundStyle(.secondary)
-                                    .lineStyle(StrokeStyle(dash: [5, 5]))
+                                    .foregroundStyle(Color.lockedGreen)
+                                    .lineStyle(StrokeStyle(lineWidth: 1.5))
+                            }
+
+                            if selectedRange == .week && selectedAverage > 0 {
+                                RuleMark(y: .value("Wochendurchschnitt", selectedAverage))
+                                    .foregroundStyle(Color.white.opacity(0.55))
+                                    .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [6, 5]))
                             }
                         }
                         .chartXScale(domain: chartPoints.map(\.label))
@@ -642,7 +710,7 @@ struct WeightStatsDetailView: View {
     }
 
     private var validRecords: [WeightRecord] {
-        records.filter { $0.weightKg > 0 }
+        records.filter { !$0.isHidden && $0.weightKg > 0 }
     }
 
     private var calendar: Calendar {
@@ -663,6 +731,22 @@ struct WeightStatsDetailView: View {
             )
         }
         .sorted { $0.weekStart < $1.weekStart }
+    }
+
+    private var chartDomain: ClosedRange<Date> {
+        guard let first = weeklyPoints.first?.weekStart,
+              let last = weeklyPoints.last?.weekStart else {
+            let now = Date()
+            return calendar.date(byAdding: .day, value: -3, to: now)!...calendar.date(byAdding: .day, value: 3, to: now)!
+        }
+
+        if first == last {
+            return calendar.date(byAdding: .day, value: -3, to: first)!...calendar.date(byAdding: .day, value: 3, to: last)!
+        }
+
+        let spanDays = max(7, calendar.dateComponents([.day], from: first, to: last).day ?? 7)
+        let paddingDays = max(2, min(21, spanDays / 20))
+        return calendar.date(byAdding: .day, value: -paddingDays, to: first)!...calendar.date(byAdding: .day, value: paddingDays, to: last)!
     }
 
     private var currentWeekAverage: Double? {
@@ -694,7 +778,7 @@ struct WeightStatsDetailView: View {
     var body: some View {
         VStack(spacing: 12) {
             LockedCard {
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 9) {
                     HStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("WOCHENDURCHSCHNITT")
@@ -736,16 +820,27 @@ struct WeightStatsDetailView: View {
                             )
                             .foregroundStyle(Color.lockedGreen)
                         }
+                        .chartXScale(domain: chartDomain)
                         .chartYScale(domain: .automatic(includesZero: false))
+                        .chartXAxis {
+                            AxisMarks(values: .automatic(desiredCount: 4)) { value in
+                                AxisGridLine()
+                                AxisValueLabel {
+                                    if let date = value.as(Date.self) {
+                                        Text(date.formatted(.dateTime.month(.abbreviated).year(.twoDigits)))
+                                    }
+                                }
+                            }
+                        }
                         .frame(maxHeight: .infinity)
-                        .frame(minHeight: 240)
+                        .frame(minHeight: 235)
                     } else {
                         ContentUnavailableView(
                             "Noch kein Wochentrend",
                             systemImage: "scalemass.fill",
                             description: Text("Wiege dich regelmäßig. Ab zwei Wochen zeigt LOCKED IN hier die geglättete Entwicklung.")
                         )
-                        .frame(minHeight: 220)
+                        .frame(minHeight: 215)
                     }
                 }
             }
@@ -756,7 +851,7 @@ struct WeightStatsDetailView: View {
                 Label("Von Waage übernehmen", systemImage: "scalemass.fill")
                     .font(.headline)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 54)
+                    .frame(height: 52)
             }
             .buttonStyle(LockedActionButtonStyle(prominent: true))
 
@@ -766,7 +861,7 @@ struct WeightStatsDetailView: View {
                 } label: {
                     Label("Manuell eintragen", systemImage: "plus")
                         .frame(maxWidth: .infinity)
-                        .frame(height: 50)
+                        .frame(height: 48)
                 }
                 .buttonStyle(LockedActionButtonStyle())
 
@@ -775,7 +870,7 @@ struct WeightStatsDetailView: View {
                 } label: {
                     Label("Verlauf", systemImage: "clock.arrow.circlepath")
                         .frame(maxWidth: .infinity)
-                        .frame(height: 50)
+                        .frame(height: 48)
                 }
                 .buttonStyle(LockedActionButtonStyle())
             }
