@@ -20,8 +20,8 @@ final class TrackingAnalyticsTests: XCTestCase {
         let now = date("2026-09-01")
         let samples = [
             TrackingAnalytics.RunSample(date: date("2026-08-05"), distanceKm: 5, durationSeconds: 1_500),
-            TrackingAnalytics.RunSample(date: date("2026-08-04"), distanceKm: 10, durationSeconds: 3_600),
-            TrackingAnalytics.RunSample(date: date("2026-08-03"), distanceKm: 20, durationSeconds: 7_200)
+            TrackingAnalytics.RunSample(date: date("2026-08-06"), distanceKm: 10, durationSeconds: 3_600),
+            TrackingAnalytics.RunSample(date: date("2026-08-04"), distanceKm: 20, durationSeconds: 7_200)
         ]
 
         let summary = TrackingAnalytics.runSummary(
