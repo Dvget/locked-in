@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import Charts
 
 struct HomeView: View {
     @Query(sort: \WorkoutRecord.startedAt, order: .reverse) private var workouts: [WorkoutRecord]
@@ -59,75 +60,76 @@ struct HomeView: View {
         totalStepsThisWeek / elapsedDaysThisWeek
     }
 
+    private var stepStatusColor: Color {
+        switch averageStepsThisWeek {
+        case ...4_000: return .red
+        case 4_001..<7_500: return .yellow
+        default: return Color.lockedGreen
+        }
+    }
+
     var body: some View {
         NavigationStack {
-            GeometryReader { geo in
-                let headerHeight: CGFloat = 28
-                let actionHeight: CGFloat = 92
-                let spacing: CGFloat = 12
-                let verticalPadding: CGFloat = 10
-                let reserved = headerHeight + actionHeight + spacing * 4 + verticalPadding * 2
-                let outerCategoryHeight = max(112, (geo.size.height - reserved) / 3)
-                let cardContentHeight = max(80, outerCategoryHeight - 32)
+            VStack(spacing: 12) {
+                BrandHeader()
+                    .frame(height: 28)
 
-                VStack(spacing: spacing) {
-                    BrandHeader()
-                        .frame(height: headerHeight)
-
-                    if unfinishedWorkout != nil {
-                        resumeCard
-                            .frame(height: actionHeight)
-                    } else {
-                        startCard
-                            .frame(height: actionHeight)
-                    }
-
-                    NavigationLink {
-                        StrengthCurrentOverviewView()
-                    } label: {
-                        TrackingCategoryCard(
-                            category: .strength,
-                            primary: "\(workoutsThisWeek) / 2",
-                            secondary: "Diese Woche · Fortschritt \(StrengthProgressMetric.text(weeklyProgress))",
-                            accent: true,
-                            minContentHeight: cardContentHeight,
-                            dashboardEmphasis: true
-                        )
-                    }
-                    .buttonStyle(.plain)
-
-                    NavigationLink {
-                        RunCurrentOverviewView()
-                    } label: {
-                        TrackingCategoryCard(
-                            category: .runs,
-                            primary: runs.first.map { "\($0.distanceKm.cleanWeight) km" } ?? "Noch nicht verbunden",
-                            secondary: "Aktuelle Laufdaten",
-                            minContentHeight: cardContentHeight,
-                            dashboardEmphasis: true
-                        )
-                    }
-                    .buttonStyle(.plain)
-
-                    NavigationLink {
-                        StepCurrentOverviewView()
-                    } label: {
-                        TrackingCategoryCard(
-                            category: .steps,
-                            primary: stepsThisWeek.isEmpty ? "Noch nicht verbunden" : "Ø \(averageStepsThisWeek.formatted()) / 10.000",
-                            secondary: stepsThisWeek.isEmpty ? "Diese Woche" : "Diese Woche · \(totalStepsThisWeek.formatted()) Schritte",
-                            minContentHeight: cardContentHeight,
-                            dashboardEmphasis: true
-                        )
-                    }
-                    .buttonStyle(.plain)
-
-
+                if unfinishedWorkout != nil {
+                    resumeCard
+                        .frame(height: 96)
+                        .padding(.horizontal, -2)
+                } else {
+                    startCard
+                        .frame(height: 96)
+                        .padding(.horizontal, -2)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, verticalPadding)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+
+                NavigationLink {
+                    StrengthCurrentOverviewView()
+                } label: {
+                    TrackingCategoryCard(
+                        category: .strength,
+                        primary: "\(workoutsThisWeek) / 2",
+                        secondary: "Diese Woche · Fortschritt \(StrengthProgressMetric.text(weeklyProgress))",
+                        accent: true,
+                        minContentHeight: 104,
+                        dashboardEmphasis: true
+                    )
+                }
+                .buttonStyle(.plain)
+
+                NavigationLink {
+                    RunCurrentOverviewView()
+                } label: {
+                    TrackingCategoryCard(
+                        category: .runs,
+                        primary: runs.first.map { "\($0.distanceKm.cleanWeight) km" } ?? "Noch nicht verbunden",
+                        secondary: "Aktuelle Laufdaten",
+                        minContentHeight: 104,
+                        dashboardEmphasis: true
+                    )
+                }
+                .buttonStyle(.plain)
+
+                NavigationLink {
+                    StepCurrentOverviewView()
+                } label: {
+                    TrackingCategoryCard(
+                        category: .steps,
+                        primary: stepsThisWeek.isEmpty ? "Noch nicht verbunden" : "Ø \(averageStepsThisWeek.formatted()) / 10.000",
+                        secondary: stepsThisWeek.isEmpty ? "Diese Woche" : "Diese Woche · \(totalStepsThisWeek.formatted()) Schritte",
+                        minContentHeight: 104,
+                        dashboardEmphasis: true,
+                        primaryColor: stepsThisWeek.isEmpty ? nil : stepStatusColor,
+                        iconAccent: false
+                    )
+                }
+                .buttonStyle(.plain)
+
+                Spacer(minLength: 0)
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
             .background(Color.black)
             .sheet(isPresented: $showPlan) { WorkoutPlanView() }
             .fullScreenCover(item: $resumedWorkout) { workoutState in
@@ -316,68 +318,149 @@ struct RunCurrentOverviewView: View {
 }
 
 struct StepCurrentOverviewView: View {
-    @Query(sort: \StepRecord.date, order: .reverse) private var records: [StepRecord]
+    @Query(sort: \StepRecord.date) private var records: [StepRecord]
 
-    private var recordsThisWeek: [StepRecord] {
-        guard let interval = Calendar.current.dateInterval(of: .weekOfYear, for: Date()) else { return [] }
-        return records.filter { interval.contains($0.date) }
+    private var calendar: Calendar { Calendar.current }
+
+    private var currentWeek: DateInterval? {
+        calendar.dateInterval(of: .weekOfYear, for: Date())
+    }
+
+    private var dailyTotals: [(date: Date, steps: Int)] {
+        guard let interval = currentWeek else { return [] }
+        let grouped = Dictionary(grouping: records) { calendar.startOfDay(for: $0.date) }
+
+        return (0..<7).compactMap { offset in
+            guard let day = calendar.date(byAdding: .day, value: offset, to: calendar.startOfDay(for: interval.start)) else { return nil }
+            let total = grouped[day]?.reduce(0) { $0 + $1.steps } ?? 0
+            return (day, total)
+        }
+    }
+
+    private var elapsedDailyTotals: [(date: Date, steps: Int)] {
+        let today = calendar.startOfDay(for: Date())
+        return dailyTotals.filter { $0.date <= today }
     }
 
     private var totalStepsThisWeek: Int {
-        recordsThisWeek.reduce(0) { $0 + $1.steps }
-    }
-
-    private var elapsedDaysThisWeek: Int {
-        guard let interval = Calendar.current.dateInterval(of: .weekOfYear, for: Date()) else { return 1 }
-        let calendar = Calendar.current
-        let start = calendar.startOfDay(for: interval.start)
-        let today = calendar.startOfDay(for: Date())
-        let days = calendar.dateComponents([.day], from: start, to: today).day ?? 0
-        return min(7, max(1, days + 1))
+        elapsedDailyTotals.reduce(0) { $0 + $1.steps }
     }
 
     private var averageStepsThisWeek: Int {
-        totalStepsThisWeek / elapsedDaysThisWeek
+        guard !elapsedDailyTotals.isEmpty else { return 0 }
+        return totalStepsThisWeek / elapsedDailyTotals.count
+    }
+
+    private var previousWeekAverages: [Double] {
+        let grouped = Dictionary(grouping: records) { record in
+            calendar.dateInterval(of: .weekOfYear, for: record.date)?.start ?? calendar.startOfDay(for: record.date)
+        }
+        guard let currentStart = currentWeek?.start else { return [] }
+
+        return grouped
+            .filter { $0.key < currentStart }
+            .compactMap { _, items -> Double? in
+                let dayGrouped = Dictionary(grouping: items) { calendar.startOfDay(for: $0.date) }
+                guard !dayGrouped.isEmpty else { return nil }
+                let total = dayGrouped.values.reduce(0) { partial, dayItems in
+                    partial + dayItems.reduce(0) { $0 + $1.steps }
+                }
+                return Double(total) / Double(dayGrouped.count)
+            }
+    }
+
+    private var comparisonText: String {
+        guard !previousWeekAverages.isEmpty else {
+            return "Noch nicht genug frühere Wochen für einen Vergleich."
+        }
+        let baseline = previousWeekAverages.reduce(0, +) / Double(previousWeekAverages.count)
+        guard baseline > 0 else { return "Noch kein sinnvoller Wochenvergleich möglich." }
+        let delta = (Double(averageStepsThisWeek) / baseline - 1) * 100
+        let absText = String(format: "%.0f", abs(delta))
+        if abs(delta) < 1 {
+            return "Diese Woche liegt ungefähr auf deinem bisherigen Wochenschnitt."
+        }
+        return delta > 0
+            ? "Diese Woche liegst du \(absText) % über deinem bisherigen Wochenschnitt."
+            : "Diese Woche liegst du \(absText) % unter deinem bisherigen Wochenschnitt."
+    }
+
+    private var averageColor: Color {
+        switch averageStepsThisWeek {
+        case ...4_000: return .red
+        case 4_001..<7_500: return .yellow
+        default: return Color.lockedGreen
+        }
     }
 
     var body: some View {
-        List {
-            Section("Diese Woche") {
-                if recordsThisWeek.isEmpty {
-                    Text("Noch keine Step-Daten in dieser Woche.")
-                        .foregroundStyle(.secondary)
-                } else {
-                    LabeledContent("Tagesdurchschnitt") {
-                        Text("\(averageStepsThisWeek.formatted()) / 10.000")
-                            .font(.headline.monospacedDigit())
-                    }
+        ScrollView {
+            VStack(spacing: 14) {
+                LockedCard {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("DIESE WOCHE")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
 
-                    LabeledContent("Wochenziel") {
-                        Text("70.000 Schritte")
-                            .monospacedDigit()
-                    }
-
-                    LabeledContent("Bisher gesamt") {
-                        Text(totalStepsThisWeek.formatted())
-                            .monospacedDigit()
-                    }
-
-                    ForEach(recordsThisWeek) { record in
-                        LabeledContent(record.date.formatted(date: .abbreviated, time: .omitted)) {
-                            Text(record.steps.formatted())
+                        HStack(alignment: .firstTextBaseline) {
+                            Text("Ø \(averageStepsThisWeek.formatted())")
+                                .font(.system(size: 34, weight: .bold, design: .rounded))
                                 .monospacedDigit()
+                                .foregroundStyle(averageColor)
+                            Text("/ 10.000")
+                                .font(.headline)
+                                .foregroundStyle(.secondary)
                         }
+
+                        Chart(dailyTotals, id: \.date) { item in
+                            BarMark(
+                                x: .value("Tag", item.date, unit: .day),
+                                y: .value("Schritte", item.steps)
+                            )
+                            .foregroundStyle(Color.lockedGreen)
+
+                            RuleMark(y: .value("Ziel", 10_000))
+                                .foregroundStyle(.secondary)
+                                .lineStyle(StrokeStyle(dash: [5, 5]))
+                        }
+                        .chartXAxis {
+                            AxisMarks(values: .stride(by: .day)) { value in
+                                AxisValueLabel(format: .dateTime.weekday(.narrow))
+                            }
+                        }
+                        .frame(height: 230)
                     }
                 }
-            }
 
-            Section {
+                LockedCard {
+                    VStack(spacing: 12) {
+                        LabeledContent("Wochenziel") {
+                            Text("70.000 Schritte").monospacedDigit()
+                        }
+                        Divider().overlay(Color.lockedBorder)
+                        LabeledContent("Bisher gesamt") {
+                            Text(totalStepsThisWeek.formatted()).monospacedDigit()
+                        }
+                        Divider().overlay(Color.lockedBorder)
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text("VERGLEICH")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                            Text(comparisonText)
+                                .font(.headline)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+
                 FullHistoryButton { StepHistoryView() }
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
         }
+        .background(Color.black)
         .navigationTitle("Steps")
         .lockedSwipeBack()
     }
 }
+
