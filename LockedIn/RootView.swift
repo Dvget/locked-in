@@ -15,9 +15,6 @@ struct RootView: View {
             HomeView()
                 .tabItem { Label("Übersicht", systemImage: "house.fill") }
 
-            StatsView()
-                .tabItem { Label("Statistiken", systemImage: "chart.bar.fill") }
-
             SettingsView()
                 .tabItem { Label("Einstellungen", systemImage: "gearshape.fill") }
         }
