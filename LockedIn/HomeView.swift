@@ -307,7 +307,7 @@ struct StepCurrentOverviewView: View {
     private var dailyTotals: [DayPoint] {
         guard let interval = currentWeek else { return [] }
         let grouped = Dictionary(grouping: records) { calendar.startOfDay(for: $0.date) }
-        let labels = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+        let labels = ["M", "D", "M", "D", "F", "S", "S"]
         let start = calendar.startOfDay(for: interval.start)
 
         return (0..<7).compactMap { offset in
@@ -391,20 +391,34 @@ struct StepCurrentOverviewView: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    Chart(dailyTotals) { item in
-                        BarMark(
-                            x: .value("Tag", item.label),
-                            y: .value("Schritte", item.steps)
-                        )
-                        .foregroundStyle(Color.lockedGreen)
+                    Chart {
+                        ForEach(dailyTotals) { item in
+                            BarMark(
+                                x: .value("Tag", item.id),
+                                y: .value("Schritte", item.steps)
+                            )
+                            .foregroundStyle(Color.lockedGreen)
+                        }
 
                         RuleMark(y: .value("Ziel", 10_000))
-                            .foregroundStyle(.secondary)
-                            .lineStyle(StrokeStyle(dash: [5, 5]))
+                            .foregroundStyle(Color.lockedGreen)
+                            .lineStyle(StrokeStyle(lineWidth: 1.5))
+
+                        if averageStepsThisWeek > 0 {
+                            RuleMark(y: .value("Wochendurchschnitt", averageStepsThisWeek))
+                                .foregroundStyle(Color.white.opacity(0.55))
+                                .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [6, 5]))
+                        }
                     }
-                    .chartXScale(domain: ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"])
+                    .chartXScale(domain: -0.5...6.5)
                     .chartXAxis {
-                        AxisMarks(values: ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"])
+                        AxisMarks(values: Array(0...6)) { value in
+                            AxisValueLabel {
+                                if let index = value.as(Int.self), dailyTotals.indices.contains(index) {
+                                    Text(dailyTotals[index].label)
+                                }
+                            }
+                        }
                     }
                     .frame(maxHeight: .infinity)
                     .frame(minHeight: 220)
