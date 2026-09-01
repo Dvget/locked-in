@@ -34,6 +34,32 @@ struct HomeView: View {
         return runs.filter { !$0.isHidden && interval.contains($0.date) }.count
     }
 
+    private var runWeekChange: Double? {
+        TrackingAnalytics.weeklyRunChange(
+            runs.filter { !$0.isHidden }.map {
+                TrackingAnalytics.RunSample(
+                    date: $0.date,
+                    distanceKm: $0.distanceKm,
+                    durationSeconds: $0.durationSeconds
+                )
+            }
+        )
+    }
+
+    private var runWeekChangeText: String {
+        guard let runWeekChange else { return "Noch kein Wochenvergleich" }
+        if abs(runWeekChange) < 0.5 { return "Unverändert zur Vorwoche" }
+        return String(format: "%+.1f %% zur Vorwoche", runWeekChange)
+            .replacingOccurrences(of: ".", with: ",")
+    }
+
+    private var runWeekChangeColor: Color {
+        guard let runWeekChange else { return .secondary }
+        if runWeekChange > 0.5 { return Color.lockedGreen }
+        if runWeekChange < -0.5 { return .red }
+        return .yellow
+    }
+
     private var weeklyProgress: Double? {
         guard let interval = currentWeekInterval else { return nil }
         let recent = workouts.filter { interval.contains($0.startedAt) }
@@ -44,9 +70,17 @@ struct HomeView: View {
         return values.reduce(0, +) / Double(values.count)
     }
 
-    private var stepsThisWeek: [StepRecord] {
+    private var preferredSteps: [TrackingAnalytics.StepSample] {
+        TrackingAnalytics.preferredStepSamples(
+            steps.map {
+                TrackingAnalytics.StepSample(date: $0.date, steps: $0.steps, source: $0.source)
+            }
+        )
+    }
+
+    private var stepsThisWeek: [TrackingAnalytics.StepSample] {
         guard let interval = currentWeekInterval else { return [] }
-        return steps.filter { interval.contains($0.date) }
+        return preferredSteps.filter { interval.contains($0.date) }
     }
 
     private var totalStepsThisWeek: Int {
@@ -122,9 +156,10 @@ struct HomeView: View {
                     TrackingCategoryCard(
                         category: .runs,
                         primary: "\(runsThisWeek) / 2",
-                        secondary: "Wochenziel",
+                        secondary: runWeekChangeText,
                         minContentHeight: 100,
                         dashboardEmphasis: true,
+                        secondaryColor: runWeekChangeColor,
                         iconAccent: false
                     )
                 }
@@ -132,7 +167,7 @@ struct HomeView: View {
                 .frame(height: 132)
 
                 NavigationLink {
-                    StepCurrentOverviewView()
+                    StepStatsDetailView()
                 } label: {
                     TrackingCategoryCard(
                         category: .steps,
@@ -467,4 +502,3 @@ struct StepCurrentOverviewView: View {
         .lockedSwipeBack()
     }
 }
-
