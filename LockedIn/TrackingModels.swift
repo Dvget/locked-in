@@ -8,13 +8,15 @@ final class RunRecord {
     var distanceKm: Double = 0
     var durationSeconds: Double = 0
     var source: String = "manual"
+    var isHidden: Bool = false
 
-    init(id: UUID = UUID(), date: Date = Date(), distanceKm: Double, durationSeconds: Double, source: String = "manual") {
+    init(id: UUID = UUID(), date: Date = Date(), distanceKm: Double, durationSeconds: Double, source: String = "manual", isHidden: Bool = false) {
         self.id = id
         self.date = date
         self.distanceKm = distanceKm
         self.durationSeconds = durationSeconds
         self.source = source
+        self.isHidden = isHidden
     }
 
     var paceSecondsPerKm: Double {
@@ -44,11 +46,13 @@ final class WeightRecord {
     var date: Date = Date()
     var weightKg: Double = 90
     var source: String = "manual"
+    var isHidden: Bool = false
 
-    init(id: UUID = UUID(), date: Date = Date(), weightKg: Double, source: String = "manual") {
+    init(id: UUID = UUID(), date: Date = Date(), weightKg: Double, source: String = "manual", isHidden: Bool = false) {
         self.id = id
         self.date = date
         self.weightKg = weightKg
         self.source = source
+        self.isHidden = isHidden
     }
 }
