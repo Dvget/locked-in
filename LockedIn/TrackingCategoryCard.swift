@@ -27,6 +27,7 @@ struct TrackingCategoryCard: View {
     var minContentHeight: CGFloat = 72
     var dashboardEmphasis: Bool = false
     var primaryColor: Color? = nil
+    var secondaryColor: Color? = nil
     var iconAccent: Bool? = nil
 
     var body: some View {
@@ -54,8 +55,9 @@ struct TrackingCategoryCard: View {
 
                     Text(secondary)
                         .font(dashboardEmphasis ? .subheadline : .caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
+                        .foregroundStyle(secondaryColor ?? Color.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                 }
 
                 Spacer(minLength: 8)
