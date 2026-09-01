@@ -864,7 +864,7 @@ struct ManualWeightEntryView: View {
             .onAppear {
                 guard !seededWeight else { return }
                 seededWeight = true
-                if let latest = records.first(where: { !$0.isHidden }) {
+                if let latest = records.first(where: { !$0.isHidden && $0.weightKg > 0 }) {
                     weightKg = latest.weightKg
                 }
             }

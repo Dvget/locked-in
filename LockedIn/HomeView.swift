@@ -20,8 +20,14 @@ struct HomeView: View {
         workouts.first(where: { !$0.isCompleted })
     }
 
+    private var trackingCalendar: Calendar {
+        var calendar = Calendar.current
+        calendar.firstWeekday = 2
+        return calendar
+    }
+
     private var currentWeekInterval: DateInterval? {
-        Calendar.current.dateInterval(of: .weekOfYear, for: Date())
+        trackingCalendar.dateInterval(of: .weekOfYear, for: Date())
     }
 
     private var workoutsThisWeek: Int {
@@ -34,6 +40,33 @@ struct HomeView: View {
         return runs.filter { !$0.isHidden && interval.contains($0.date) }.count
     }
 
+    private var runWeekChange: Double? {
+        TrackingAnalytics.weeklyRunChange(
+            runs.filter { !$0.isHidden }.map {
+                TrackingAnalytics.RunSample(
+                    date: $0.date,
+                    distanceKm: $0.distanceKm,
+                    durationSeconds: $0.durationSeconds
+                )
+            },
+            calendar: trackingCalendar
+        )
+    }
+
+    private var runWeekChangeText: String {
+        guard let runWeekChange else { return "Noch kein Wochenvergleich" }
+        if abs(runWeekChange) < 0.5 { return "Unverändert zur Vorwoche" }
+        return String(format: "%+.1f %% zur Vorwoche", runWeekChange)
+            .replacingOccurrences(of: ".", with: ",")
+    }
+
+    private var runWeekChangeColor: Color {
+        guard let runWeekChange else { return .secondary }
+        if runWeekChange > 0.5 { return Color.lockedGreen }
+        if runWeekChange < -0.5 { return .red }
+        return .yellow
+    }
+
     private var weeklyProgress: Double? {
         guard let interval = currentWeekInterval else { return nil }
         let recent = workouts.filter { interval.contains($0.startedAt) }
@@ -44,9 +77,17 @@ struct HomeView: View {
         return values.reduce(0, +) / Double(values.count)
     }
 
-    private var stepsThisWeek: [StepRecord] {
+    private var preferredSteps: [TrackingAnalytics.StepSample] {
+        TrackingAnalytics.preferredStepSamples(
+            steps.map {
+                TrackingAnalytics.StepSample(date: $0.date, steps: $0.steps, source: $0.source)
+            }
+        )
+    }
+
+    private var stepsThisWeek: [TrackingAnalytics.StepSample] {
         guard let interval = currentWeekInterval else { return [] }
-        return steps.filter { interval.contains($0.date) }
+        return preferredSteps.filter { interval.contains($0.date) }
     }
 
     private var totalStepsThisWeek: Int {
@@ -55,7 +96,7 @@ struct HomeView: View {
 
     private var elapsedDaysThisWeek: Int {
         guard let interval = currentWeekInterval else { return 1 }
-        let calendar = Calendar.current
+        let calendar = trackingCalendar
         let start = calendar.startOfDay(for: interval.start)
         let today = calendar.startOfDay(for: Date())
         let days = calendar.dateComponents([.day], from: start, to: today).day ?? 0
@@ -122,9 +163,10 @@ struct HomeView: View {
                     TrackingCategoryCard(
                         category: .runs,
                         primary: "\(runsThisWeek) / 2",
-                        secondary: "Wochenziel",
+                        secondary: runWeekChangeText,
                         minContentHeight: 100,
                         dashboardEmphasis: true,
+                        secondaryColor: runWeekChangeColor,
                         iconAccent: false
                     )
                 }
@@ -132,7 +174,7 @@ struct HomeView: View {
                 .frame(height: 132)
 
                 NavigationLink {
-                    StepCurrentOverviewView()
+                    StepStatsDetailView()
                 } label: {
                     TrackingCategoryCard(
                         category: .steps,
@@ -283,188 +325,3 @@ struct HomeView: View {
         }
     }
 }
-
-struct StepCurrentOverviewView: View {
-    @Query(sort: \StepRecord.date) private var records: [StepRecord]
-
-    private struct DayPoint: Identifiable {
-        let id: Int
-        let label: String
-        let date: Date
-        let steps: Int
-    }
-
-    private var calendar: Calendar {
-        var value = Calendar.current
-        value.firstWeekday = 2
-        return value
-    }
-
-    private var currentWeek: DateInterval? {
-        calendar.dateInterval(of: .weekOfYear, for: Date())
-    }
-
-    private var dailyTotals: [DayPoint] {
-        guard let interval = currentWeek else { return [] }
-        let grouped = Dictionary(grouping: records) { calendar.startOfDay(for: $0.date) }
-        let labels = ["M", "D", "M", "D", "F", "S", "S"]
-        let start = calendar.startOfDay(for: interval.start)
-
-        return (0..<7).compactMap { offset in
-            guard let day = calendar.date(byAdding: .day, value: offset, to: start) else { return nil }
-            let total = grouped[day]?.reduce(0) { $0 + $1.steps } ?? 0
-            return DayPoint(id: offset, label: labels[offset], date: day, steps: total)
-        }
-    }
-
-    private var elapsedDailyTotals: [DayPoint] {
-        let today = calendar.startOfDay(for: Date())
-        return dailyTotals.filter { $0.date <= today }
-    }
-
-    private var totalStepsThisWeek: Int {
-        elapsedDailyTotals.reduce(0) { $0 + $1.steps }
-    }
-
-    private var averageStepsThisWeek: Int {
-        guard !elapsedDailyTotals.isEmpty else { return 0 }
-        return totalStepsThisWeek / elapsedDailyTotals.count
-    }
-
-    private var previousWeekAverages: [Double] {
-        let grouped = Dictionary(grouping: records) { record in
-            calendar.dateInterval(of: .weekOfYear, for: record.date)?.start ?? calendar.startOfDay(for: record.date)
-        }
-        guard let currentStart = currentWeek?.start else { return [] }
-
-        return grouped
-            .filter { $0.key < currentStart }
-            .compactMap { _, items -> Double? in
-                let dayGrouped = Dictionary(grouping: items) { calendar.startOfDay(for: $0.date) }
-                guard !dayGrouped.isEmpty else { return nil }
-                let total = dayGrouped.values.reduce(0) { partial, dayItems in
-                    partial + dayItems.reduce(0) { $0 + $1.steps }
-                }
-                return Double(total) / Double(dayGrouped.count)
-            }
-    }
-
-    private var comparisonText: String {
-        guard !previousWeekAverages.isEmpty else {
-            return "Noch nicht genug frühere Wochen für einen Vergleich."
-        }
-        let baseline = previousWeekAverages.reduce(0, +) / Double(previousWeekAverages.count)
-        guard baseline > 0 else { return "Noch kein sinnvoller Wochenvergleich möglich." }
-        let delta = (Double(averageStepsThisWeek) / baseline - 1) * 100
-        let absText = String(format: "%.0f", abs(delta))
-        if abs(delta) < 1 {
-            return "Diese Woche liegt ungefähr auf deinem bisherigen Wochenschnitt."
-        }
-        return delta > 0
-            ? "Diese Woche liegst du \(absText) % über deinem bisherigen Wochenschnitt."
-            : "Diese Woche liegst du \(absText) % unter deinem bisherigen Wochenschnitt."
-    }
-
-    private var averageColor: Color {
-        switch averageStepsThisWeek {
-        case ...4_000: return .red
-        case 4_001..<7_500: return .yellow
-        default: return Color.lockedGreen
-        }
-    }
-
-    var body: some View {
-        VStack(spacing: 12) {
-            LockedCard {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("DIESE WOCHE")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-
-                    HStack(alignment: .firstTextBaseline) {
-                        Text("Ø \(averageStepsThisWeek.formatted())")
-                            .font(.system(size: 34, weight: .bold, design: .rounded))
-                            .monospacedDigit()
-                            .foregroundStyle(averageColor)
-                        Text("/ 10.000")
-                            .font(.headline)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Chart {
-                        ForEach(dailyTotals) { item in
-                            BarMark(
-                                x: .value("Tag", item.id),
-                                y: .value("Schritte", item.steps)
-                            )
-                            .foregroundStyle(Color.lockedGreen)
-                        }
-
-                        RuleMark(y: .value("Ziel", 10_000))
-                            .foregroundStyle(Color.lockedGreen)
-                            .lineStyle(StrokeStyle(lineWidth: 1.5))
-
-                        if averageStepsThisWeek > 0 {
-                            RuleMark(y: .value("Wochendurchschnitt", averageStepsThisWeek))
-                                .foregroundStyle(Color.white.opacity(0.55))
-                                .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [6, 5]))
-                        }
-                    }
-                    .chartXScale(domain: -0.5...6.5)
-                    .chartXAxis {
-                        AxisMarks(values: Array(0...6)) { value in
-                            AxisValueLabel {
-                                if let index = value.as(Int.self), dailyTotals.indices.contains(index) {
-                                    Text(dailyTotals[index].label)
-                                }
-                            }
-                        }
-                    }
-                    .frame(maxHeight: .infinity)
-                    .frame(minHeight: 220)
-                }
-            }
-
-            LockedCard {
-                VStack(spacing: 10) {
-                    LabeledContent("Wochenziel") {
-                        Text("70.000 Schritte").monospacedDigit()
-                    }
-                    Divider().overlay(Color.lockedBorder)
-                    LabeledContent("Bisher gesamt") {
-                        Text(totalStepsThisWeek.formatted()).monospacedDigit()
-                    }
-                    Divider().overlay(Color.lockedBorder)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("VERGLEICH")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                        Text(comparisonText)
-                            .font(.headline)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
-
-            NavigationLink {
-                StepStatsDetailView()
-            } label: {
-                LockedCard {
-                    HStack {
-                        Text("Statistik ansehen")
-                            .font(.headline)
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                    }
-                }
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(Color.black)
-        .navigationTitle("Steps")
-        .lockedSwipeBack()
-    }
-}
-
