@@ -17,6 +17,7 @@ struct BackupRun: Codable {
     let distanceKm: Double
     let durationSeconds: Double
     let source: String
+    let isHidden: Bool?
 }
 
 struct BackupStep: Codable {
@@ -31,6 +32,7 @@ struct BackupWeight: Codable {
     let date: Date
     let weightKg: Double
     let source: String
+    let isHidden: Bool?
 }
 
 struct BackupWorkout: Codable {
@@ -94,13 +96,13 @@ enum BackupDatabase {
                 BackupSet(id: $0.id, workoutID: $0.workoutID, exerciseID: $0.exerciseID, exerciseName: $0.exerciseName, planSlot: $0.planSlot, setNumber: $0.setNumber, weight: $0.weight, reps: $0.reps, rir: $0.rir, completedAt: $0.completedAt)
             },
             runs: runs.map {
-                BackupRun(id: $0.id, date: $0.date, distanceKm: $0.distanceKm, durationSeconds: $0.durationSeconds, source: $0.source)
+                BackupRun(id: $0.id, date: $0.date, distanceKm: $0.distanceKm, durationSeconds: $0.durationSeconds, source: $0.source, isHidden: $0.isHidden)
             },
             steps: steps.map {
                 BackupStep(id: $0.id, date: $0.date, steps: $0.steps, source: $0.source)
             },
             weights: weights.map {
-                BackupWeight(id: $0.id, date: $0.date, weightKg: $0.weightKg, source: $0.source)
+                BackupWeight(id: $0.id, date: $0.date, weightKg: $0.weightKg, source: $0.source, isHidden: $0.isHidden)
             }
         )
     }
@@ -156,13 +158,13 @@ enum BackupDatabase {
         }
 
         for item in payload.runs ?? [] {
-            modelContext.insert(RunRecord(id: item.id, date: item.date, distanceKm: item.distanceKm, durationSeconds: item.durationSeconds, source: item.source))
+            modelContext.insert(RunRecord(id: item.id, date: item.date, distanceKm: item.distanceKm, durationSeconds: item.durationSeconds, source: item.source, isHidden: item.isHidden ?? false))
         }
         for item in payload.steps ?? [] {
             modelContext.insert(StepRecord(id: item.id, date: item.date, steps: item.steps, source: item.source))
         }
         for item in payload.weights ?? [] {
-            modelContext.insert(WeightRecord(id: item.id, date: item.date, weightKg: item.weightKg, source: item.source))
+            modelContext.insert(WeightRecord(id: item.id, date: item.date, weightKg: item.weightKg, source: item.source, isHidden: item.isHidden ?? false))
         }
 
         try modelContext.save()
