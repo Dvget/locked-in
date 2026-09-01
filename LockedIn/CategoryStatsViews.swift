@@ -31,6 +31,14 @@ struct StrengthStatsDetailView: View {
     @Query(sort: \WorkoutRecord.startedAt) private var workouts: [WorkoutRecord]
     @Query private var sets: [SetRecord]
     @State private var showAdd = false
+    @State private var selectedSeries: StrengthSeries = .performance
+
+    private enum StrengthSeries: String, CaseIterable, Identifiable {
+        case performance = "Leistung"
+        case volume = "Volumen"
+
+        var id: String { rawValue }
+    }
 
     private var completedWorkouts: [WorkoutRecord] {
         workouts.filter { $0.isCompleted && !$0.isHidden }.sorted { $0.startedAt < $1.startedAt }
@@ -58,6 +66,23 @@ struct StrengthStatsDetailView: View {
         return StrengthProgressMetric.workoutProgress(workout: last, workouts: workouts, sets: sets)
     }
 
+    private var volumePoints: [ProgressPoint] {
+        completedWorkouts.compactMap { workout in
+            let samples = sets
+                .filter { $0.workoutID == workout.id && $0.reps > 0 }
+                .map { set in
+                    TrackingAnalytics.StrengthSetSample(
+                        weightKg: set.weight,
+                        reps: set.reps,
+                        repsOnly: ExerciseCatalog.exercise(id: set.exerciseID)?.repsOnly ?? false
+                    )
+                }
+            let volume = TrackingAnalytics.trainingVolume(samples)
+            guard volume > 0 else { return nil }
+            return ProgressPoint(date: workout.startedAt, value: volume)
+        }
+    }
+
     private var trainingFrequency: Double {
         guard let first = completedWorkouts.first, let last = completedWorkouts.last else { return 0 }
         let days = max(1, Calendar.current.dateComponents([.day], from: first.startedAt, to: last.startedAt).day ?? 0)
@@ -66,41 +91,85 @@ struct StrengthStatsDetailView: View {
 
     var body: some View {
         VStack(spacing: 10) {
+            Picker("Statistik", selection: $selectedSeries) {
+                ForEach(StrengthSeries.allCases) { series in
+                    Text(series.rawValue).tag(series)
+                }
+            }
+            .pickerStyle(.segmented)
+
             LockedCard {
                 VStack(alignment: .leading, spacing: 8) {
-                    HStack(alignment: .top) {
+                    if selectedSeries == .performance {
+                        HStack(alignment: .top) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("GESAMTLEISTUNGSINDEX")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                Text(cumulativePoints.last.map { String(format: "%.1f", $0.value).replacingOccurrences(of: ".", with: ",") } ?? "—")
+                                    .font(.system(size: 34, weight: .bold, design: .rounded))
+                                    .monospacedDigit()
+                            }
+                            Spacer()
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text("SEIT BEGINN")
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                Text(StrengthProgressMetric.text(totalChange))
+                                    .font(.headline.monospacedDigit())
+                                    .foregroundStyle(StrengthProgressStyle.color(for: totalChange))
+                            }
+                        }
+
+                        if cumulativePoints.count >= 2 {
+                            Chart(cumulativePoints) { point in
+                                LineMark(x: .value("Datum", point.date), y: .value("Index", point.value))
+                                    .foregroundStyle(Color.lockedGreen)
+                                PointMark(x: .value("Datum", point.date), y: .value("Index", point.value))
+                                    .foregroundStyle(Color.lockedGreen)
+                            }
+                            .chartYScale(domain: .automatic(includesZero: false))
+                            .frame(height: 190)
+                        } else {
+                            Text("Für den Gesamttrend werden mindestens zwei vergleichbare Trainings benötigt.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, minHeight: 150, alignment: .center)
+                        }
+                    } else {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("GESAMTLEISTUNGSINDEX")
+                            Text("TRAININGSVOLUMEN")
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(.secondary)
-                            Text(cumulativePoints.last.map { String(format: "%.1f", $0.value).replacingOccurrences(of: ".", with: ",") } ?? "—")
+                            Text(volumePoints.last.map { "\(Int($0.value.rounded()).formatted()) kg" } ?? "—")
                                 .font(.system(size: 34, weight: .bold, design: .rounded))
                                 .monospacedDigit()
                         }
-                        Spacer()
-                        VStack(alignment: .trailing, spacing: 2) {
-                            Text("SEIT BEGINN")
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                            Text(StrengthProgressMetric.text(totalChange))
-                                .font(.headline.monospacedDigit())
-                                .foregroundStyle(StrengthProgressStyle.color(for: totalChange))
-                        }
-                    }
 
-                    if cumulativePoints.count >= 2 {
-                        Chart(cumulativePoints) { point in
-                            LineMark(x: .value("Datum", point.date), y: .value("Index", point.value))
-                                .foregroundStyle(Color.lockedGreen)
-                            PointMark(x: .value("Datum", point.date), y: .value("Index", point.value))
-                                .foregroundStyle(Color.lockedGreen)
+                        if volumePoints.count >= 2 {
+                            Chart(volumePoints) { point in
+                                LineMark(x: .value("Datum", point.date), y: .value("Kilogramm", point.value))
+                                    .foregroundStyle(Color.lockedGreen)
+                                PointMark(x: .value("Datum", point.date), y: .value("Kilogramm", point.value))
+                                    .foregroundStyle(Color.lockedGreen)
+                            }
+                            .chartYAxis {
+                                AxisMarks { value in
+                                    AxisGridLine()
+                                    AxisValueLabel {
+                                        if let number = value.as(Double.self) {
+                                            Text("\(Int(number.rounded()).formatted()) kg")
+                                        }
+                                    }
+                                }
+                            }
+                            .frame(height: 190)
+                        } else {
+                            Text("Ab zwei Trainings zeigt LOCKED IN hier die bewegte Kilozahl pro Training.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, minHeight: 150, alignment: .center)
                         }
-                        .frame(height: 190)
-                    } else {
-                        Text("Für den Gesamttrend werden mindestens zwei vergleichbare Trainings benötigt.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, minHeight: 150, alignment: .center)
                     }
                 }
             }
@@ -115,28 +184,6 @@ struct StrengthStatsDetailView: View {
                 }
             }
 
-            HStack(spacing: 10) {
-                NavigationLink {
-                    ExerciseStatsView()
-                } label: {
-                    Label("Übungen", systemImage: "dumbbell.fill")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 50)
-                }
-                .buttonStyle(LockedActionButtonStyle())
-
-                NavigationLink {
-                    StrengthHistoryView()
-                } label: {
-                    Label("Verlauf", systemImage: "clock.arrow.circlepath")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 50)
-                }
-                .buttonStyle(LockedActionButtonStyle())
-            }
-
             Button {
                 showAdd = true
             } label: {
@@ -146,6 +193,26 @@ struct StrengthStatsDetailView: View {
                     .frame(height: 50)
             }
             .buttonStyle(LockedActionButtonStyle(prominent: true))
+
+            NavigationLink {
+                ExerciseStatsView()
+            } label: {
+                Label("Einzelne Übungen", systemImage: "dumbbell.fill")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 50)
+            }
+            .buttonStyle(LockedActionButtonStyle())
+
+            NavigationLink {
+                StrengthHistoryView()
+            } label: {
+                Label("Trainingsverlauf", systemImage: "clock.arrow.circlepath")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 50)
+            }
+            .buttonStyle(LockedActionButtonStyle())
 
             Spacer(minLength: 0)
         }
@@ -180,18 +247,35 @@ struct ExerciseStatsView: View {
     }
 
     private var points: [ProgressPoint] {
-        workouts
+        let relevantWorkouts = workouts
             .filter { $0.isCompleted && !$0.isHidden }
-            .compactMap { workout in
-                guard let progress = StrengthProgressMetric.exerciseProgress(
+            .filter { workout in
+                sets.contains {
+                    $0.workoutID == workout.id &&
+                    $0.exerciseID == exerciseID &&
+                    $0.reps > 0
+                }
+            }
+            .sorted { $0.startedAt < $1.startedAt }
+
+        guard let first = relevantWorkouts.first else { return [] }
+        var dates = [first.startedAt]
+        var changes: [Double] = []
+
+        for workout in relevantWorkouts.dropFirst() {
+            if let change = StrengthProgressMetric.exerciseProgress(
                     exerciseID: exerciseID,
                     workout: workout,
                     workouts: workouts,
                     sets: sets
-                ) else { return nil }
-                return ProgressPoint(date: workout.startedAt, value: progress)
+            ) {
+                dates.append(workout.startedAt)
+                changes.append(change)
             }
-            .sorted { $0.date < $1.date }
+        }
+
+        let values = TrackingAnalytics.cumulativeIndex(changes: changes)
+        return zip(dates, values).map { ProgressPoint(date: $0.0, value: $0.1) }
     }
 
     private var current: Double? { points.last?.value }
@@ -199,6 +283,18 @@ struct ExerciseStatsView: View {
     private var average: Double? {
         guard !points.isEmpty else { return nil }
         return points.map(\.value).reduce(0, +) / Double(points.count)
+    }
+
+    private func indexText(_ value: Double?) -> String {
+        guard let value else { return "—" }
+        return String(format: "%.1f", value).replacingOccurrences(of: ".", with: ",")
+    }
+
+    private func indexColor(_ value: Double?) -> Color {
+        guard let value else { return .secondary }
+        if value > 100.05 { return Color.lockedGreen }
+        if value < 99.95 { return .red }
+        return .yellow
     }
 
     var body: some View {
@@ -248,26 +344,26 @@ struct ExerciseStatsView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
                             VStack(alignment: .leading, spacing: 3) {
-                                Text("LEISTUNGSFORTSCHRITT")
+                                Text("LEISTUNGSINDEX")
                                     .font(.caption.weight(.semibold))
                                     .foregroundStyle(.secondary)
-                                Text(StrengthProgressMetric.text(current))
+                                Text(indexText(current))
                                     .font(.system(size: 34, weight: .bold, design: .rounded))
                                     .monospacedDigit()
-                                    .foregroundStyle(StrengthProgressStyle.color(for: current))
+                                    .foregroundStyle(indexColor(current))
                             }
                             Spacer()
                             VStack(alignment: .trailing, spacing: 3) {
                                 Text("Ø")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
-                                Text(StrengthProgressMetric.text(average))
+                                Text(indexText(average))
                                     .font(.headline.monospacedDigit())
-                                    .foregroundStyle(StrengthProgressStyle.color(for: average))
+                                    .foregroundStyle(indexColor(average))
                             }
                         }
 
-                        if points.isEmpty {
+                        if points.count < 2 {
                             ContentUnavailableView(
                                 "Noch kein Vergleich möglich",
                                 systemImage: "chart.xyaxis.line",
@@ -292,7 +388,7 @@ struct ExerciseStatsView: View {
                                     AxisGridLine()
                                     AxisValueLabel {
                                         if let number = value.as(Double.self) {
-                                            Text(String(format: "%.0f%%", number))
+                                            Text(String(format: "%.0f", number))
                                         }
                                     }
                                 }
@@ -307,7 +403,7 @@ struct ExerciseStatsView: View {
             .padding(.vertical, 12)
         }
         .background(Color.black)
-        .navigationTitle("Übungen")
+        .navigationTitle("Einzelne Übungen")
         .lockedSwipeBack()
     }
 }
@@ -348,8 +444,44 @@ struct RunStatsDetailView: View {
     }
 
     private var progressPoints: [RunProgressMetric.Point] { RunProgressMetric.points(for: validRuns) }
-    private var latestOverall: Double? { progressPoints.last?.overallIndex }
-    private var overallChange: Double? { RunProgressMetric.changeFromBaseline(for: validRuns) }
+    private var trackingSeries: TrackingAnalytics.RunSeries {
+        switch selectedSeries {
+        case .overall: return .overall
+        case .distance: return .distance
+        case .pace: return .pace
+        }
+    }
+
+    private var selectedChange: Double? {
+        TrackingAnalytics.runSeriesChange(samples, series: trackingSeries)
+    }
+
+    private var selectedTitle: String {
+        switch selectedSeries {
+        case .overall: return "LAUFENTWICKLUNG"
+        case .distance: return "DISTANZENTWICKLUNG"
+        case .pace: return "PACE-ENTWICKLUNG"
+        }
+    }
+
+    private var selectedCurrentText: String {
+        guard let latest = progressPoints.last else { return "—" }
+        switch selectedSeries {
+        case .overall:
+            return RunProgressMetric.text(latest.overallIndex)
+        case .distance:
+            return "\(latest.distanceKm.cleanWeight) km"
+        case .pace:
+            return "\(formatPace(latest.paceSecondsPerKm)) min/km"
+        }
+    }
+
+    private var selectedChangeColor: Color {
+        guard let selectedChange else { return .secondary }
+        if selectedChange > 0.05 { return Color.lockedGreen }
+        if selectedChange < -0.05 { return .red }
+        return .yellow
+    }
 
     private var seriesColor: Color {
         switch selectedSeries {
@@ -362,8 +494,8 @@ struct RunStatsDetailView: View {
     private func seriesValue(_ point: RunProgressMetric.Point) -> Double {
         switch selectedSeries {
         case .overall: return point.overallIndex
-        case .distance: return point.distanceIndex
-        case .pace: return point.paceIndex
+        case .distance: return point.distanceKm
+        case .pace: return -point.paceSecondsPerKm
         }
     }
 
@@ -380,10 +512,10 @@ struct RunStatsDetailView: View {
                 VStack(alignment: .leading, spacing: 7) {
                     HStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("LAUFENTWICKLUNG")
+                            Text(selectedTitle)
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(.secondary)
-                            Text(latestOverall.map { RunProgressMetric.text($0) } ?? "—")
+                            Text(selectedCurrentText)
                                 .font(.system(size: 34, weight: .bold, design: .rounded))
                                 .monospacedDigit()
                         }
@@ -392,9 +524,9 @@ struct RunStatsDetailView: View {
                             Text("SEIT BEGINN")
                                 .font(.caption2.weight(.semibold))
                                 .foregroundStyle(.secondary)
-                            Text(overallChange.map { String(format: "%+.1f %%", $0).replacingOccurrences(of: ".", with: ",") } ?? "—")
+                            Text(selectedChange.map { String(format: "%+.1f %%", $0).replacingOccurrences(of: ".", with: ",") } ?? "—")
                                 .font(.headline.monospacedDigit())
-                                .foregroundStyle((overallChange ?? 0) >= 0 ? Color.lockedGreen : .red)
+                                .foregroundStyle(selectedChangeColor)
                         }
                     }
 
@@ -421,6 +553,23 @@ struct RunStatsDetailView: View {
                             }
                         }
                         .chartYScale(domain: .automatic(includesZero: false))
+                        .chartYAxis {
+                            AxisMarks { value in
+                                AxisGridLine()
+                                AxisValueLabel {
+                                    if let number = value.as(Double.self) {
+                                        switch selectedSeries {
+                                        case .overall:
+                                            Text(String(format: "%.0f", number))
+                                        case .distance:
+                                            Text("\(number.cleanWeight) km")
+                                        case .pace:
+                                            Text("\(formatPace(abs(number))) min/km")
+                                        }
+                                    }
+                                }
+                            }
+                        }
                         .chartLegend(.hidden)
                         .frame(height: 185)
                     }
@@ -513,8 +662,6 @@ struct StepStatsDetailView: View {
 
     private enum StepRange: String, CaseIterable, Identifiable {
         case week = "Woche"
-        case month = "Monat"
-        case year = "Jahr"
         case all = "Gesamt"
 
         var id: String { rawValue }
@@ -549,12 +696,6 @@ struct StepStatsDetailView: View {
         case .week:
             guard let interval = calendar.dateInterval(of: .weekOfYear, for: now) else { return [] }
             return dailyTotals.filter { interval.contains($0.date) }
-        case .month:
-            guard let interval = calendar.dateInterval(of: .month, for: now) else { return [] }
-            return dailyTotals.filter { interval.contains($0.date) }
-        case .year:
-            guard let interval = calendar.dateInterval(of: .year, for: now) else { return [] }
-            return dailyTotals.filter { interval.contains($0.date) }
         case .all:
             return dailyTotals
         }
@@ -573,24 +714,6 @@ struct StepStatsDetailView: View {
                 let steps = dailyTotals.first(where: { calendar.isDate($0.date, inSameDayAs: day) })?.steps ?? 0
                 return StepBarPoint(label: labels[offset], date: day, steps: steps)
             }
-
-        case .month:
-            guard let interval = calendar.dateInterval(of: .month, for: now) else { return [] }
-            return dailyTotals.filter { interval.contains($0.date) }.map {
-                StepBarPoint(label: "\(calendar.component(.day, from: $0.date))", date: $0.date, steps: $0.steps)
-            }
-
-        case .year:
-            guard let interval = calendar.dateInterval(of: .year, for: now) else { return [] }
-            let grouped = Dictionary(grouping: dailyTotals.filter { interval.contains($0.date) }) {
-                calendar.date(from: calendar.dateComponents([.year, .month], from: $0.date)) ?? $0.date
-            }
-            let formatter = DateFormatter()
-            formatter.locale = Locale(identifier: "de_DE")
-            formatter.dateFormat = "MMM"
-            return grouped.map { date, items in
-                StepBarPoint(label: formatter.string(from: date), date: date, steps: items.reduce(0) { $0 + $1.steps })
-            }.sorted { $0.date < $1.date }
 
         case .all:
             guard let first = dailyTotals.first?.date, let last = dailyTotals.last?.date else { return [] }
@@ -645,16 +768,33 @@ struct StepStatsDetailView: View {
     }
 
     private var selectedAverage: Double {
+        if selectedRange == .week { return weeklyAverage }
         guard !relevantDailyTotals.isEmpty else { return 0 }
         return Double(relevantDailyTotals.reduce(0) { $0 + $1.steps }) / Double(relevantDailyTotals.count)
     }
 
     private var averageColor: Color {
-        switch Int(selectedAverage.rounded()) {
-        case ...4_000: return .red
-        case 4_001..<7_500: return .yellow
-        default: return Color.lockedGreen
+        color(for: TrackingAnalytics.dailyStepStatus(steps: Int(selectedAverage.rounded())))
+    }
+
+    private var chartMaximum: Double {
+        if selectedRange == .week {
+            return Double(TrackingAnalytics.stepChartMaximum(chartPoints.map(\.steps)))
         }
+        return max(1, Double(chartPoints.map(\.steps).max() ?? 0) * 1.1)
+    }
+
+    private func color(for status: TrackingAnalytics.Status) -> Color {
+        switch status {
+        case .red: return .red
+        case .yellow: return .yellow
+        case .green: return Color.lockedGreen
+        }
+    }
+
+    private func barColor(for point: StepBarPoint) -> Color {
+        guard selectedRange == .week else { return Color.lockedGreen }
+        return color(for: TrackingAnalytics.dailyStepStatus(steps: point.steps))
     }
 
     var body: some View {
@@ -689,7 +829,7 @@ struct StepStatsDetailView: View {
                                     y: .value("Schritte", point.steps),
                                     width: .fixed(selectedRange == .week ? 24 : 10)
                                 )
-                                .foregroundStyle(Color.lockedGreen)
+                                .foregroundStyle(barColor(for: point))
                             }
 
                             if selectedRange == .week {
@@ -715,6 +855,7 @@ struct StepStatsDetailView: View {
                             }
                         }
                         .chartXScale(domain: chartPoints.map(\.label))
+                        .chartYScale(domain: 0...chartMaximum)
                         .frame(maxHeight: .infinity)
                         .frame(minHeight: 250)
                     }
@@ -726,9 +867,13 @@ struct StepStatsDetailView: View {
                     Text("STEPS DIESE WOCHE")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
-                    Text("\(currentWeekTotal.formatted()) / 70.000")
-                        .font(.title2.bold().monospacedDigit())
-                        .foregroundStyle(weeklyProgressColor)
+                    HStack(spacing: 5) {
+                        Text(currentWeekTotal.formatted())
+                            .foregroundStyle(weeklyProgressColor)
+                        Text("/ 70.000")
+                            .foregroundStyle(.primary)
+                    }
+                    .font(.title2.bold().monospacedDigit())
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -765,7 +910,7 @@ struct WeightStatsDetailView: View {
     @Query(sort: \WeightRecord.date) private var records: [WeightRecord]
     @StateObject private var scaleManager = EtekcityScaleManager()
     @State private var showAdd = false
-    @State private var selectedRange: TrackingAnalytics.Range = .week
+    @State private var selectedRange: TrackingAnalytics.Range = .month
     @State private var didChooseInitialRange = false
 
     private var validRecords: [WeightRecord] {
@@ -833,7 +978,7 @@ struct WeightStatsDetailView: View {
     var body: some View {
         VStack(spacing: 12) {
             Picker("Zeitraum", selection: $selectedRange) {
-                ForEach(TrackingAnalytics.Range.allCases) { range in
+                ForEach([TrackingAnalytics.Range.month, .year, .all]) { range in
                     Text(range.rawValue).tag(range)
                 }
             }
@@ -968,6 +1113,9 @@ struct WeightStatsDetailView: View {
                     weightSamples,
                     calendar: calendar
                 )
+                if selectedRange == .week {
+                    selectedRange = .month
+                }
                 didChooseInitialRange = true
             }
 
