@@ -89,6 +89,7 @@ struct ActiveWorkoutView: View {
                     timerEndDate = storedEnd
                     remainingSeconds = max(0, Int(ceil(storedEnd.timeIntervalSinceNow)))
                     timerRunning = true
+                    TimerNotificationManager.schedule(endDate: storedEnd)
                 } else {
                     resetTimerForCurrentExercise()
                 }
@@ -363,6 +364,9 @@ struct ActiveWorkoutView: View {
         timerEndDate = Date().addingTimeInterval(TimeInterval(defaultRestSeconds))
         timerRunning = true
         persistSession()
+        if let timerEndDate {
+            TimerNotificationManager.schedule(endDate: timerEndDate)
+        }
         LiveActivityManager.startOrUpdate(
             workoutID: state.workoutID,
             startedAt: state.startedAt,
@@ -379,6 +383,7 @@ struct ActiveWorkoutView: View {
         if seconds <= 0 {
             timerRunning = false
             self.timerEndDate = nil
+            TimerNotificationManager.cancel()
             persistSession()
             LiveActivityManager.startOrUpdate(
                 workoutID: state.workoutID,
@@ -429,6 +434,7 @@ struct ActiveWorkoutView: View {
             timerEndDate = newEnd
             remainingSeconds = max(0, Int(ceil(newEnd.timeIntervalSinceNow)))
             persistSession()
+            TimerNotificationManager.schedule(endDate: newEnd)
             LiveActivityManager.startOrUpdate(
                 workoutID: state.workoutID,
                 startedAt: state.startedAt,
@@ -469,7 +475,7 @@ struct ActiveWorkoutView: View {
     }
 
     private func cancelTimerNotification() {
-        // Intentionally empty: 0.241 no longer creates Notification Center entries.
+        TimerNotificationManager.cancel()
     }
 
     private func saveSet(repsOverride: Int? = nil) {
@@ -725,7 +731,7 @@ private struct PreviousPerformanceView: View {
                 let target = sets.first(where: { $0.setNumber == targetSetNumber }) ?? sets.last!
 
                 Text("Satz \(target.setNumber) letztes Mal")
-                    .font(.caption)
+                    .font(.subheadline.weight(.medium))
                     .foregroundStyle(Color.lockedGreen)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 5)
@@ -734,17 +740,18 @@ private struct PreviousPerformanceView: View {
                     .frame(maxWidth: .infinity)
 
                 Text(mainText(target))
-                    .font(.title.bold().monospacedDigit())
+                    .font(.system(size: 40, weight: .bold, design: .rounded))
+                    .monospacedDigit()
                     .frame(maxWidth: .infinity)
 
                 HStack {
                     ForEach(sets.prefix(3), id: \.id) { set in
                         VStack(spacing: 4) {
                             Text("Satz \(set.setNumber)")
-                                .font(.caption)
+                                .font(.subheadline)
                                 .foregroundStyle(set.setNumber == targetSetNumber ? Color.lockedGreen : .secondary)
                             Text(shortText(set))
-                                .font(.subheadline.monospacedDigit())
+                                .font(.title3.monospacedDigit())
                                 .foregroundStyle(set.setNumber == targetSetNumber ? Color.lockedGreen : .primary)
                         }
                         .frame(maxWidth: .infinity)
