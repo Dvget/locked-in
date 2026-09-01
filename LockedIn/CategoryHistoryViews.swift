@@ -488,8 +488,17 @@ struct ManualRunEntryView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var date = Date()
     @State private var distanceKm = 5.0
-    @State private var durationMinutes = 30
+    @State private var paceMinutes = 6
+    @State private var paceSeconds = 0
     @State private var showDatePicker = false
+
+    private var paceTotalSeconds: Int {
+        max(1, paceMinutes * 60 + paceSeconds)
+    }
+
+    private var calculatedDuration: Double {
+        max(0.01, distanceKm) * Double(paceTotalSeconds)
+    }
 
     var body: some View {
         NavigationStack {
@@ -497,17 +506,40 @@ struct ManualRunEntryView: View {
                 Button { showDatePicker = true } label: {
                     LabeledContent("Datum", value: date.formatted(date: .abbreviated, time: .omitted))
                 }
-                TextField("Distanz in km", value: $distanceKm, format: .number)
-                    .keyboardType(.decimalPad)
-                Stepper("Dauer: \(durationMinutes) Min.", value: $durationMinutes, in: 1...600)
+
+                Section("Laufdaten") {
+                    TextField("Distanz in km", value: $distanceKm, format: .number.precision(.fractionLength(0...2)))
+                        .keyboardType(.decimalPad)
+
+                    Stepper("Pace Minuten: \(paceMinutes)", value: $paceMinutes, in: 2...20)
+                    Stepper("Pace Sekunden: \(paceSeconds)", value: $paceSeconds, in: 0...59)
+
+                    LabeledContent("Pace") {
+                        Text(String(format: "%d:%02d /km", paceMinutes, paceSeconds))
+                            .monospacedDigit()
+                    }
+
+                    LabeledContent("Berechnete Dauer") {
+                        Text(formatDuration(calculatedDuration))
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
             .navigationTitle("Lauf nachtragen")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Speichern") {
-                        modelContext.insert(RunRecord(date: date, distanceKm: max(0.01, distanceKm), durationSeconds: Double(durationMinutes * 60)))
+                        modelContext.insert(
+                            RunRecord(
+                                date: date,
+                                distanceKm: max(0.01, distanceKm),
+                                durationSeconds: calculatedDuration
+                            )
+                        )
                         try? modelContext.save()
+                        try? AutomaticBackup.backup(modelContext: modelContext)
                         dismiss()
                     }
                 }
@@ -517,6 +549,17 @@ struct ManualRunEntryView: View {
                     .presentationDetents([.medium])
             }
         }
+    }
+
+    private func formatDuration(_ seconds: Double) -> String {
+        let total = Int(seconds.rounded())
+        let hours = total / 3600
+        let minutes = (total % 3600) / 60
+        let secs = total % 60
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, secs)
+        }
+        return String(format: "%d:%02d", minutes, secs)
     }
 }
 
