@@ -30,32 +30,21 @@ private struct WeightPoint: Identifiable {
 struct StrengthStatsDetailView: View {
     @Query(sort: \WorkoutRecord.startedAt) private var workouts: [WorkoutRecord]
     @Query private var sets: [SetRecord]
+    @State private var showAdd = false
 
     private var completedWorkouts: [WorkoutRecord] {
-        workouts
-            .filter { $0.isCompleted && !$0.isHidden }
-            .sorted { $0.startedAt < $1.startedAt }
+        workouts.filter { $0.isCompleted && !$0.isHidden }.sorted { $0.startedAt < $1.startedAt }
     }
 
     private var cumulativePoints: [ProgressPoint] {
         guard let first = completedWorkouts.first else { return [] }
-
-        var result: [ProgressPoint] = [
-            ProgressPoint(date: first.startedAt, value: 100)
-        ]
+        var result = [ProgressPoint(date: first.startedAt, value: 100)]
         var index = 100.0
-
         for workout in completedWorkouts.dropFirst() {
-            guard let delta = StrengthProgressMetric.workoutProgress(
-                workout: workout,
-                workouts: workouts,
-                sets: sets
-            ) else { continue }
-
+            guard let delta = StrengthProgressMetric.workoutProgress(workout: workout, workouts: workouts, sets: sets) else { continue }
             index *= (1 + delta / 100)
             result.append(ProgressPoint(date: workout.startedAt, value: index))
         }
-
         return result
     }
 
@@ -66,141 +55,112 @@ struct StrengthStatsDetailView: View {
 
     private var latestWorkoutChange: Double? {
         guard let last = completedWorkouts.last else { return nil }
-        return StrengthProgressMetric.workoutProgress(
-            workout: last,
-            workouts: workouts,
-            sets: sets
-        )
+        return StrengthProgressMetric.workoutProgress(workout: last, workouts: workouts, sets: sets)
     }
 
     private var trainingFrequency: Double {
         guard let first = completedWorkouts.first, let last = completedWorkouts.last else { return 0 }
         let days = max(1, Calendar.current.dateComponents([.day], from: first.startedAt, to: last.startedAt).day ?? 0)
-        let weeks = max(1.0, Double(days + 1) / 7.0)
-        return Double(completedWorkouts.count) / weeks
+        return Double(completedWorkouts.count) / max(1, Double(days + 1) / 7)
     }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 14) {
-                LockedCard {
-                    VStack(alignment: .leading, spacing: 14) {
-                        HStack(alignment: .top) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("GESAMTLEISTUNGSINDEX")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(.secondary)
-                                Text(cumulativePoints.last.map { String(format: "%.1f", $0.value).replacingOccurrences(of: ".", with: ",") } ?? "—")
-                                    .font(.system(size: 36, weight: .bold, design: .rounded))
-                                    .monospacedDigit()
-                            }
-
-                            Spacer()
-
-                            VStack(alignment: .trailing, spacing: 4) {
-                                Text("SEIT BEGINN")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(.secondary)
-                                Text(StrengthProgressMetric.text(totalChange))
-                                    .font(.headline.monospacedDigit())
-                                    .foregroundStyle(StrengthProgressStyle.color(for: totalChange))
-                            }
+        VStack(spacing: 10) {
+            LockedCard {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("GESAMTLEISTUNGSINDEX")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                            Text(cumulativePoints.last.map { String(format: "%.1f", $0.value).replacingOccurrences(of: ".", with: ",") } ?? "—")
+                                .font(.system(size: 34, weight: .bold, design: .rounded))
+                                .monospacedDigit()
                         }
-
-                        if cumulativePoints.count < 2 {
-                            ContentUnavailableView(
-                                "Noch kein Gesamttrend",
-                                systemImage: "chart.xyaxis.line",
-                                description: Text("Für den Gesamttrend werden mindestens zwei vergleichbare Trainings benötigt.")
-                            )
-                            .frame(height: 220)
-                        } else {
-                            Chart(cumulativePoints) { point in
-                                LineMark(
-                                    x: .value("Datum", point.date),
-                                    y: .value("Index", point.value)
-                                )
-                                .foregroundStyle(Color.lockedGreen)
-
-                                PointMark(
-                                    x: .value("Datum", point.date),
-                                    y: .value("Index", point.value)
-                                )
-                                .foregroundStyle(Color.lockedGreen)
-                            }
-                            .frame(height: 250)
+                        Spacer()
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("SEIT BEGINN")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                            Text(StrengthProgressMetric.text(totalChange))
+                                .font(.headline.monospacedDigit())
+                                .foregroundStyle(StrengthProgressStyle.color(for: totalChange))
                         }
                     }
-                }
 
-                LockedCard {
-                    VStack(spacing: 14) {
-                        HStack {
-                            metric(
-                                title: "LETZTES TRAINING",
-                                value: StrengthProgressMetric.text(latestWorkoutChange),
-                                valueColor: StrengthProgressStyle.color(for: latestWorkoutChange)
-                            )
-                            Spacer()
-                            metric(
-                                title: "TRAININGS",
-                                value: completedWorkouts.count.formatted()
-                            )
+                    if cumulativePoints.count >= 2 {
+                        Chart(cumulativePoints) { point in
+                            LineMark(x: .value("Datum", point.date), y: .value("Index", point.value))
+                                .foregroundStyle(Color.lockedGreen)
+                            PointMark(x: .value("Datum", point.date), y: .value("Index", point.value))
+                                .foregroundStyle(Color.lockedGreen)
                         }
-
-                        Divider().overlay(Color.lockedBorder)
-
-                        HStack {
-                            metric(
-                                title: "Ø PRO WOCHE",
-                                value: trainingFrequency == 0 ? "—" : String(format: "%.1f", trainingFrequency).replacingOccurrences(of: ".", with: ",")
-                            )
-                            Spacer()
-                            metric(
-                                title: "BASISINDEX",
-                                value: "100,0"
-                            )
-                        }
+                        .frame(height: 190)
+                    } else {
+                        Text("Für den Gesamttrend werden mindestens zwei vergleichbare Trainings benötigt.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, minHeight: 150, alignment: .center)
                     }
                 }
+            }
 
+            LockedCard {
+                HStack {
+                    metric("LETZTES TRAINING", StrengthProgressMetric.text(latestWorkoutChange), StrengthProgressStyle.color(for: latestWorkoutChange))
+                    Spacer()
+                    metric("TRAININGS", completedWorkouts.count.formatted())
+                    Spacer()
+                    metric("Ø / WOCHE", trainingFrequency == 0 ? "—" : String(format: "%.1f", trainingFrequency).replacingOccurrences(of: ".", with: ","))
+                }
+            }
+
+            HStack(spacing: 10) {
                 NavigationLink {
                     ExerciseStatsView()
                 } label: {
-                    LockedCard {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("EINZELNE ÜBUNGEN")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(.secondary)
-                                Text("Übungsfortschritt ansehen")
-                                    .font(.headline)
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .foregroundStyle(.secondary)
-                        }
-                    }
+                    Label("Übungen", systemImage: "dumbbell.fill")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(LockedActionButtonStyle())
+
+                NavigationLink {
+                    StrengthHistoryView()
+                } label: {
+                    Label("Verlauf", systemImage: "clock.arrow.circlepath")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
+                }
+                .buttonStyle(LockedActionButtonStyle())
             }
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+
+            Button {
+                showAdd = true
+            } label: {
+                Label("Training nachtragen", systemImage: "plus")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 50)
+            }
+            .buttonStyle(LockedActionButtonStyle(prominent: true))
+
+            Spacer(minLength: 0)
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
         .background(Color.black)
         .navigationTitle("Krafttraining")
+        .sheet(isPresented: $showAdd) { ManualStrengthEntryView() }
         .lockedSwipeBack()
     }
 
-    private func metric(title: String, value: String, valueColor: Color = .primary) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.title3.bold().monospacedDigit())
-                .foregroundStyle(valueColor)
+    private func metric(_ title: String, _ value: String, _ color: Color = .primary) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+            Text(value).font(.headline.bold().monospacedDigit()).foregroundStyle(color)
         }
     }
 }
@@ -354,191 +314,118 @@ struct ExerciseStatsView: View {
 
 struct RunStatsDetailView: View {
     @Query(sort: \RunRecord.date) private var runs: [RunRecord]
+    @State private var showAdd = false
 
-    private var validRuns: [RunRecord] {
-        runs.filter { $0.distanceKm > 0 && $0.durationSeconds > 0 }
-    }
-
-    private var totalDistance: Double {
-        validRuns.reduce(0) { $0 + $1.distanceKm }
-    }
-
-    private var totalDuration: Double {
-        validRuns.reduce(0) { $0 + $1.durationSeconds }
-    }
-
-    private var averageDistance: Double {
-        validRuns.isEmpty ? 0 : totalDistance / Double(validRuns.count)
-    }
-
-    private var weightedPace: Double {
-        totalDistance > 0 ? totalDuration / totalDistance : 0
-    }
-
-    private var progressPoints: [RunProgressMetric.Point] {
-        RunProgressMetric.points(for: validRuns)
-    }
-
-    private var latestOverall: Double? {
-        progressPoints.last?.overallIndex
-    }
-
-    private var overallChange: Double? {
-        RunProgressMetric.changeFromBaseline(for: validRuns)
-    }
+    private var validRuns: [RunRecord] { runs.filter { $0.distanceKm > 0 && $0.durationSeconds > 0 } }
+    private var totalDistance: Double { validRuns.reduce(0) { $0 + $1.distanceKm } }
+    private var totalDuration: Double { validRuns.reduce(0) { $0 + $1.durationSeconds } }
+    private var averageDistance: Double { validRuns.isEmpty ? 0 : totalDistance / Double(validRuns.count) }
+    private var weightedPace: Double { totalDistance > 0 ? totalDuration / totalDistance : 0 }
+    private var progressPoints: [RunProgressMetric.Point] { RunProgressMetric.points(for: validRuns) }
+    private var latestOverall: Double? { progressPoints.last?.overallIndex }
+    private var overallChange: Double? { RunProgressMetric.changeFromBaseline(for: validRuns) }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 14) {
-                LockedCard {
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack(alignment: .top) {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("LAUFENTWICKLUNG")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(.secondary)
-                                Text(latestOverall.map { RunProgressMetric.text($0) } ?? "—")
-                                    .font(.system(size: 34, weight: .bold, design: .rounded))
-                                    .monospacedDigit()
-                            }
-
-                            Spacer()
-
-                            VStack(alignment: .trailing, spacing: 3) {
-                                Text("SEIT BEGINN")
-                                    .font(.caption2.weight(.semibold))
-                                    .foregroundStyle(.secondary)
-                                Text(overallChange.map { String(format: "%+.1f %%", $0).replacingOccurrences(of: ".", with: ",") } ?? "—")
-                                    .font(.headline.monospacedDigit())
-                                    .foregroundStyle((overallChange ?? 0) >= 0 ? Color.lockedGreen : .red)
-                            }
-                        }
-
-                        if progressPoints.isEmpty {
-                            ContentUnavailableView(
-                                "Noch keine Laufdaten",
-                                systemImage: "figure.run",
-                                description: Text("Sobald Läufe vorhanden sind, erscheinen hier Distanz, Pace und Gesamtentwicklung.")
-                            )
-                            .frame(height: 220)
-                        } else {
-                            Chart {
-                                ForEach(progressPoints, id: \.date) { point in
-                                    LineMark(
-                                        x: .value("Datum", point.date),
-                                        y: .value("Distanz-Index", point.distanceIndex),
-                                        series: .value("Metrik", "Distanz")
-                                    )
-                                    .foregroundStyle(by: .value("Metrik", "Distanz"))
-
-                                    LineMark(
-                                        x: .value("Datum", point.date),
-                                        y: .value("Pace-Index", point.paceIndex),
-                                        series: .value("Metrik", "Pace")
-                                    )
-                                    .foregroundStyle(by: .value("Metrik", "Pace"))
-
-                                    LineMark(
-                                        x: .value("Datum", point.date),
-                                        y: .value("Gesamt-Index", point.overallIndex),
-                                        series: .value("Metrik", "Gesamt")
-                                    )
-                                    .foregroundStyle(by: .value("Metrik", "Gesamt"))
-                                    .lineStyle(StrokeStyle(lineWidth: 3))
-                                }
-                            }
-                            .chartYScale(domain: .automatic(includesZero: false))
-                            .chartLegend(position: .bottom, alignment: .leading)
-                            .frame(height: 280)
-
-                            Text("Index 100 = dein erster erfasster Lauf. Distanz und Pace werden auf dieselbe Skala normiert; der Gesamtwert kombiniert beide.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-
-                LockedCard {
-                    VStack(spacing: 14) {
-                        HStack {
-                            metric(title: "LÄUFE", value: validRuns.count.formatted())
-                            Spacer()
-                            metric(title: "GESAMTDISTANZ", value: totalDistance > 0 ? "\(totalDistance.cleanWeight) km" : "—")
-                        }
-
-                        Divider().overlay(Color.lockedBorder)
-
-                        HStack {
-                            metric(title: "GESAMTZEIT", value: totalDuration > 0 ? formatLongDuration(totalDuration) : "—")
-                            Spacer()
-                            metric(title: "Ø DISTANZ", value: averageDistance > 0 ? "\(averageDistance.cleanWeight) km" : "—")
-                        }
-
-                        Divider().overlay(Color.lockedBorder)
-
-                        HStack {
-                            metric(title: "Ø PACE", value: weightedPace > 0 ? "\(formatPace(weightedPace)) /km" : "—")
-                            Spacer()
-                            metric(title: "GESAMTINDEX", value: latestOverall.map { RunProgressMetric.text($0) } ?? "—")
-                        }
-                    }
-                }
-
-                if !validRuns.isEmpty {
-                    LockedCard {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("EINZELWERTE")
+        VStack(spacing: 10) {
+            LockedCard {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("LAUFENTWICKLUNG")
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(.secondary)
-
-                            ForEach(validRuns.reversed(), id: \.id) { run in
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(run.date.formatted(date: .abbreviated, time: .omitted))
-                                            .font(.subheadline.weight(.semibold))
-                                        Text("\(run.distanceKm.cleanWeight) km · \(formatPace(run.paceSecondsPerKm)) /km")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    Spacer()
-                                    Text(formatLongDuration(run.durationSeconds))
-                                        .font(.subheadline.monospacedDigit())
-                                }
-                            }
-
-                            Text("Herzfrequenz wird hier ergänzt, sobald eine spätere Datenquelle sie zuverlässig liefert.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                            Text(latestOverall.map { RunProgressMetric.text($0) } ?? "—")
+                                .font(.system(size: 34, weight: .bold, design: .rounded))
+                                .monospacedDigit()
                         }
+                        Spacer()
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("SEIT BEGINN")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                            Text(overallChange.map { String(format: "%+.1f %%", $0).replacingOccurrences(of: ".", with: ",") } ?? "—")
+                                .font(.headline.monospacedDigit())
+                                .foregroundStyle((overallChange ?? 0) >= 0 ? Color.lockedGreen : .red)
+                        }
+                    }
+
+                    if progressPoints.isEmpty {
+                        Text("Sobald Läufe vorhanden sind, erscheinen hier Distanz, Pace und Gesamtentwicklung.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, minHeight: 150, alignment: .center)
+                    } else {
+                        Chart {
+                            ForEach(progressPoints, id: \.date) { point in
+                                LineMark(x: .value("Datum", point.date), y: .value("Distanz", point.distanceIndex), series: .value("Metrik", "Distanz"))
+                                    .foregroundStyle(by: .value("Metrik", "Distanz"))
+                                LineMark(x: .value("Datum", point.date), y: .value("Pace", point.paceIndex), series: .value("Metrik", "Pace"))
+                                    .foregroundStyle(by: .value("Metrik", "Pace"))
+                                LineMark(x: .value("Datum", point.date), y: .value("Gesamt", point.overallIndex), series: .value("Metrik", "Gesamt"))
+                                    .foregroundStyle(by: .value("Metrik", "Gesamt"))
+                                    .lineStyle(StrokeStyle(lineWidth: 3))
+                            }
+                        }
+                        .chartYScale(domain: .automatic(includesZero: false))
+                        .chartLegend(position: .bottom, alignment: .leading)
+                        .frame(height: 210)
                     }
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+
+            LockedCard {
+                VStack(spacing: 8) {
+                    HStack {
+                        metric("LÄUFE", validRuns.count.formatted())
+                        Spacer()
+                        metric("GESAMTDISTANZ", totalDistance > 0 ? "\(totalDistance.cleanWeight) km" : "—")
+                    }
+                    Divider().overlay(Color.lockedBorder)
+                    HStack {
+                        metric("Ø DISTANZ", averageDistance > 0 ? "\(averageDistance.cleanWeight) km" : "—")
+                        Spacer()
+                        metric("Ø PACE", weightedPace > 0 ? "\(formatPace(weightedPace)) /km" : "—")
+                    }
+                }
+            }
+
+            HStack(spacing: 10) {
+                NavigationLink {
+                    RunHistoryView()
+                } label: {
+                    Label("Einzelwerte", systemImage: "list.bullet")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
+                }
+                .buttonStyle(LockedActionButtonStyle())
+
+                Button {
+                    showAdd = true
+                } label: {
+                    Label("Lauf nachtragen", systemImage: "plus")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
+                }
+                .buttonStyle(LockedActionButtonStyle(prominent: true))
+            }
+
+            Spacer(minLength: 0)
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
         .background(Color.black)
         .navigationTitle("Läufe")
+        .sheet(isPresented: $showAdd) { ManualRunEntryView() }
         .lockedSwipeBack()
     }
 
-    private func metric(title: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.title3.bold().monospacedDigit())
+    private func metric(_ title: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+            Text(value).font(.headline.bold().monospacedDigit())
         }
-    }
-
-    private func formatLongDuration(_ seconds: Double) -> String {
-        let total = Int(seconds)
-        let hours = total / 3600
-        let minutes = (total % 3600) / 60
-        if hours > 0 {
-            return String(format: "%d:%02d h", hours, minutes)
-        }
-        return "\(minutes) min"
     }
 
     private func formatPace(_ seconds: Double) -> String {
