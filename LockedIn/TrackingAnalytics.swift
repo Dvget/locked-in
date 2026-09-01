@@ -213,9 +213,9 @@ enum TrackingAnalytics {
         let valid = samples.filter { $0.weightKg > 0 }.sorted { $0.date < $1.date }
         guard let first = valid.first?.date, let last = valid.last?.date else { return .week }
         let days = calendar.dateComponents([.day], from: first, to: last).day ?? 0
-        if days <= 7 { return .week }
-        if days <= 31 { return .month }
-        if days <= 366 { return .year }
+        if days < 7 { return .week }
+        if days < 31 { return .month }
+        if days < 366 { return .year }
         return .all
     }
 
@@ -226,27 +226,42 @@ enum TrackingAnalytics {
         calendar: Calendar = .current
     ) -> [WeightPoint] {
         let valid = samples.filter { $0.weightKg > 0 }
-        let filtered: [WeightSample]
-
-        if let cutoff = rollingCutoff(for: range, now: now, calendar: calendar) {
-            let end = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) ?? now
-            filtered = valid.filter { $0.date >= cutoff && $0.date < end }
-        } else {
-            filtered = valid
-        }
-
-        let grouped = Dictionary(grouping: filtered) {
+        let grouped = Dictionary(grouping: valid) {
             calendar.dateInterval(of: .weekOfYear, for: $0.date)?.start
                 ?? calendar.startOfDay(for: $0.date)
         }
 
-        return grouped.map { start, values in
+        let points = grouped.map { start, values in
             WeightPoint(
                 weekStart: start,
                 averageKg: values.reduce(0) { $0 + $1.weightKg } / Double(values.count)
             )
         }
         .sorted { $0.weekStart < $1.weekStart }
+
+        guard range != .all,
+              let latestAvailable = valid
+                .filter({ $0.date <= now })
+                .map(\.date)
+                .max(),
+              let cutoff = rollingCutoff(
+                for: range,
+                now: latestAvailable,
+                calendar: calendar
+              ) else {
+            return points
+        }
+
+        let end = calendar.date(
+            byAdding: .day,
+            value: 1,
+            to: calendar.startOfDay(for: latestAvailable)
+        ) ?? latestAvailable
+
+        return points.filter { point in
+            let interval = calendar.dateInterval(of: .weekOfYear, for: point.weekStart)
+            return (interval?.end ?? point.weekStart) > cutoff && point.weekStart < end
+        }
     }
 
     private static func rollingCutoff(
