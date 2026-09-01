@@ -31,7 +31,7 @@ struct HomeView: View {
 
     private var runsThisWeek: Int {
         guard let interval = currentWeekInterval else { return 0 }
-        return runs.filter { interval.contains($0.date) }.count
+        return runs.filter { !$0.isHidden && interval.contains($0.date) }.count
     }
 
     private var weeklyProgress: Double? {
@@ -86,6 +86,9 @@ struct HomeView: View {
             VStack(spacing: 10) {
                 BrandHeader()
                     .frame(height: 30)
+
+                Spacer()
+                    .frame(height: 8)
 
                 if unfinishedWorkout != nil {
                     resumeCard
@@ -176,15 +179,12 @@ struct HomeView: View {
                     .background(Color.white.opacity(0.08))
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("GEWICHT")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    Text("Übersicht")
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-                    Text("Wochentrend & Waage")
-                        .font(.caption)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Gewicht")
+                        .font(.title3.bold())
+                        .foregroundStyle(.white)
+                    Text("Gewichtsübersicht und Waage")
+                        .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
 
