@@ -114,7 +114,7 @@ struct SettingsView: View {
                 }
 
                 Section("LOCKED IN") {
-                    LabeledContent("Version", value: "0.4.2")
+                    LabeledContent("Version", value: "0.4.3")
                     Text("Trainingsdaten liegen primär lokal in SwiftData. JSON-Backups dienen als zusätzliche Sicherung und können wieder importiert werden.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
