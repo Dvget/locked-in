@@ -231,7 +231,7 @@ struct ManualStrengthEntryView: View {
     }
 
     private var bodyWeightForManualWorkout: Double {
-        weightRecords.first(where: { $0.source == EtekcityScaleManager.sourceID })?.weightKg
+        weightRecords.first(where: { !$0.isHidden && $0.source == EtekcityScaleManager.sourceID })?.weightKg
             ?? manualBodyWeightKg
     }
 
