@@ -46,15 +46,7 @@ enum CoreMotionStepSync {
 
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
-        let existing = try modelContext.fetch(FetchDescriptor<StepRecord>())
-
-        for record in existing where record.source == sourceID {
-            if record.date >= (calendar.date(byAdding: .day, value: -7, to: today) ?? .distantPast) {
-                modelContext.delete(record)
-            }
-        }
-
-        var importedDays = 0
+        var imported: [(date: Date, steps: Int)] = []
 
         for offset in stride(from: 6, through: 0, by: -1) {
             guard let day = calendar.date(byAdding: .day, value: -offset, to: today),
@@ -64,20 +56,26 @@ enum CoreMotionStepSync {
 
             let end = min(Date(), nextDay)
             let steps = try await query(from: day, to: end)
+            imported.append((date: day, steps: max(0, steps)))
+        }
+
+        let existing = try modelContext.fetch(FetchDescriptor<StepRecord>())
+        for dayValue in imported {
+            for record in existing where calendar.isDate(record.date, inSameDayAs: dayValue.date) {
+                modelContext.delete(record)
+            }
 
             modelContext.insert(
                 StepRecord(
-                    date: day,
-                    steps: max(0, steps),
+                    date: dayValue.date,
+                    steps: dayValue.steps,
                     source: sourceID
                 )
             )
-
-            importedDays += 1
         }
 
         try modelContext.save()
         try? AutomaticBackup.backup(modelContext: modelContext)
-        return importedDays
+        return imported.count
     }
 }
