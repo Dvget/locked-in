@@ -2,6 +2,9 @@ name: Build LOCKED IN IPA
 
 on:
   workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths: [ '.build-trigger' ]
 
 permissions:
   contents: read
