@@ -7,12 +7,9 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @AppStorage("heavyRestSeconds") private var heavyRestSeconds: Double = 150
     @AppStorage("lightRestSeconds") private var lightRestSeconds: Double = 120
-    @AppStorage("manualBodyWeightKg") private var manualBodyWeightKg: Double = StrengthProgressMetric.fallbackBodyWeightKg
     @AppStorage("coreMotionStepsEnabled") private var coreMotionStepsEnabled = false
     @AppStorage("lastAutomaticStepSync") private var lastAutomaticStepSync: Double = 0
-    @Query(sort: \WeightRecord.date, order: .reverse) private var weightRecords: [WeightRecord]
 
-    @StateObject private var scaleManager = EtekcityScaleManager()
     @State private var stepSyncStatus = ""
     @State private var isSyncingSteps = false
     @State private var exportDocument: LockedInBackupDocument?
@@ -38,48 +35,6 @@ struct SettingsView: View {
                             Text("\(Int(lightRestSeconds)) Sek.")
                         }
                     }
-                }
-
-                Section("Körpergewicht") {
-                    LabeledContent("Verwendetes Gewicht") {
-                        Text("\(effectiveBodyWeight.cleanWeight) kg")
-                            .font(.headline.monospacedDigit())
-                            .foregroundStyle(latestScaleWeight != nil ? Color.lockedGreen : .primary)
-                    }
-
-                    LabeledContent("Quelle", value: latestScaleWeight != nil ? "Etekcity ESF-551" : "Manuell")
-
-                    if let latestScaleWeight {
-                        LabeledContent("Letzte Waagen-Messung") {
-                            Text(latestScaleWeight.date.formatted(date: .abbreviated, time: .shortened))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    Button {
-                        scaleManager.startMeasurement()
-                    } label: {
-                        Label("Gewicht von Waage übernehmen", systemImage: "scalemass.fill")
-                    }
-
-                    Text(scaleManager.state.message)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-
-                    HStack {
-                        Text("Manueller Fallback")
-                        Spacer()
-                        TextField("90,0", value: $manualBodyWeightKg, format: .number.precision(.fractionLength(1)))
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                            .frame(width: 90)
-                        Text("kg")
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Text("LOCKED IN verbindet sich nur kurz direkt mit der ESF-551, übernimmt einen stabilen Messwert und trennt Bluetooth danach sofort wieder. VeSync kann die Waage anschließend normal weiterverwenden.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
                 }
 
                 Section("Steps") {
@@ -159,7 +114,7 @@ struct SettingsView: View {
                 }
 
                 Section("LOCKED IN") {
-                    LabeledContent("Version", value: "0.3.2")
+                    LabeledContent("Version", value: "0.4.1")
                     Text("Trainingsdaten liegen primär lokal in SwiftData. JSON-Backups dienen als zusätzliche Sicherung und können wieder importiert werden.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
@@ -168,25 +123,7 @@ struct SettingsView: View {
             .scrollContentBackground(.hidden)
             .background(Color.black)
             .navigationTitle("Einstellungen")
-            .onAppear {
-                scaleManager.onMeasurement = { weight in
-                    let existing = weightRecords.filter { $0.source == EtekcityScaleManager.sourceID }
-                    for record in existing where abs(record.date.timeIntervalSinceNow) < 120 {
-                        modelContext.delete(record)
-                    }
 
-                    modelContext.insert(
-                        WeightRecord(
-                            date: Date(),
-                            weightKg: weight,
-                            source: EtekcityScaleManager.sourceID
-                        )
-                    )
-                    try? modelContext.save()
-                    try? AutomaticBackup.backup(modelContext: modelContext)
-                }
-            }
-        }
         .sheet(isPresented: $showFolderPicker) {
             FolderPicker { url in
                 showFolderPicker = false
@@ -230,14 +167,6 @@ struct SettingsView: View {
         } message: {
             Text("Alle aktuell gespeicherten Trainings werden durch die Daten aus dem Backup ersetzt.")
         }
-    }
-
-    private var latestScaleWeight: WeightRecord? {
-        weightRecords.first(where: { $0.source == EtekcityScaleManager.sourceID })
-    }
-
-    private var effectiveBodyWeight: Double {
-        latestScaleWeight?.weightKg ?? manualBodyWeightKg
     }
 
     @MainActor
