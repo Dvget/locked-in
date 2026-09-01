@@ -134,4 +134,45 @@ final class TrackingAnalyticsTests: XCTestCase {
         XCTAssertEqual(points[0].averageKg, 95, accuracy: 0.001)
         XCTAssertEqual(points[1].averageKg, 93.5, accuracy: 0.001)
     }
+
+    func testWeightPointsUseCompleteWeekBeforeRangeClipping() {
+        let samples = [
+            TrackingAnalytics.WeightSample(date: date("2026-08-28"), weightKg: 100),
+            TrackingAnalytics.WeightSample(date: date("2026-08-29"), weightKg: 80),
+            TrackingAnalytics.WeightSample(date: date("2026-09-04"), weightKg: 95)
+        ]
+
+        let points = TrackingAnalytics.weightPoints(
+            samples,
+            range: .week,
+            now: date("2026-09-04"),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(points.count, 2)
+        XCTAssertEqual(points[0].averageKg, 90, accuracy: 0.001)
+        XCTAssertEqual(points[1].averageKg, 95, accuracy: 0.001)
+    }
+
+    func testWeightRangeAnchorsToLatestAvailableMeasurement() {
+        let samples = [
+            TrackingAnalytics.WeightSample(date: date("2025-01-01"), weightKg: 96),
+            TrackingAnalytics.WeightSample(date: date("2025-01-05"), weightKg: 95)
+        ]
+
+        XCTAssertEqual(
+            TrackingAnalytics.defaultWeightRange(samples, calendar: calendar),
+            .week
+        )
+
+        let points = TrackingAnalytics.weightPoints(
+            samples,
+            range: .week,
+            now: date("2026-09-01"),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(points.count, 1)
+        XCTAssertEqual(points[0].averageKg, 95.5, accuracy: 0.001)
+    }
 }
