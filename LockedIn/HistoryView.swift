@@ -1,62 +1,6 @@
 import SwiftUI
 import SwiftData
 
-struct HistoryView: View {
-    @Query private var workouts: [WorkoutRecord]
-    @Query private var runs: [RunRecord]
-    @Query private var steps: [StepRecord]
-
-    private var completedStrength: Int {
-        workouts.filter { $0.isCompleted }.count
-    }
-
-    var body: some View {
-        NavigationStack {
-            EntryScreenLayout(cardCount: 3) { cardHeight in
-                NavigationLink {
-                    StrengthHistoryView()
-                } label: {
-                    TrackingCategoryCard(
-                        category: .strength,
-                        primary: "\(completedStrength) Trainings",
-                        secondary: "Krafttraining-Verlauf",
-                        accent: true,
-                        minContentHeight: cardHeight
-                    )
-                }
-                .buttonStyle(.plain)
-
-                NavigationLink {
-                    RunHistoryView()
-                } label: {
-                    TrackingCategoryCard(
-                        category: .runs,
-                        primary: runs.isEmpty ? "Noch keine Einträge" : "\(runs.count) Läufe",
-                        secondary: "Verlauf & manuell nachtragen",
-                        minContentHeight: cardHeight
-                    )
-                }
-                .buttonStyle(.plain)
-
-                NavigationLink {
-                    StepHistoryView()
-                } label: {
-                    TrackingCategoryCard(
-                        category: .steps,
-                        primary: steps.isEmpty ? "Noch keine Einträge" : "\(steps.count) Tage",
-                        secondary: "Verlauf & manuell nachtragen",
-                        minContentHeight: cardHeight
-                    )
-                }
-                .buttonStyle(.plain)
-
-
-            }
-            .navigationTitle("Verlauf")
-        }
-    }
-}
-
 struct WorkoutDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
