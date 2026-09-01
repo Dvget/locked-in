@@ -375,8 +375,16 @@ struct RunStatsDetailView: View {
         totalDistance > 0 ? totalDuration / totalDistance : 0
     }
 
-    private var chartPoints: [RunDistancePoint] {
-        validRuns.map { RunDistancePoint(date: $0.date, distanceKm: $0.distanceKm) }
+    private var progressPoints: [RunProgressMetric.Point] {
+        RunProgressMetric.points(for: validRuns)
+    }
+
+    private var latestOverall: Double? {
+        progressPoints.last?.overallIndex
+    }
+
+    private var overallChange: Double? {
+        RunProgressMetric.changeFromBaseline(for: validRuns)
     }
 
     var body: some View {
@@ -384,31 +392,68 @@ struct RunStatsDetailView: View {
             VStack(spacing: 14) {
                 LockedCard {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("LAUFENTWICKLUNG")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
+                        HStack(alignment: .top) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("LAUFENTWICKLUNG")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                Text(latestOverall.map { RunProgressMetric.text($0) } ?? "—")
+                                    .font(.system(size: 34, weight: .bold, design: .rounded))
+                                    .monospacedDigit()
+                            }
 
-                        if chartPoints.isEmpty {
+                            Spacer()
+
+                            VStack(alignment: .trailing, spacing: 3) {
+                                Text("SEIT BEGINN")
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                Text(overallChange.map { String(format: "%+.1f %%", $0).replacingOccurrences(of: ".", with: ",") } ?? "—")
+                                    .font(.headline.monospacedDigit())
+                                    .foregroundStyle((overallChange ?? 0) >= 0 ? Color.lockedGreen : .red)
+                            }
+                        }
+
+                        if progressPoints.isEmpty {
                             ContentUnavailableView(
                                 "Noch keine Laufdaten",
                                 systemImage: "figure.run",
-                                description: Text("Sobald Läufe vorhanden sind, erscheint hier die Gesamtübersicht.")
+                                description: Text("Sobald Läufe vorhanden sind, erscheinen hier Distanz, Pace und Gesamtentwicklung.")
                             )
                             .frame(height: 220)
                         } else {
-                            Chart(chartPoints) { point in
-                                LineMark(
-                                    x: .value("Datum", point.date),
-                                    y: .value("Distanz", point.distanceKm)
-                                )
-                                .foregroundStyle(Color.lockedGreen)
-                                PointMark(
-                                    x: .value("Datum", point.date),
-                                    y: .value("Distanz", point.distanceKm)
-                                )
-                                .foregroundStyle(Color.lockedGreen)
+                            Chart {
+                                ForEach(progressPoints, id: \.date) { point in
+                                    LineMark(
+                                        x: .value("Datum", point.date),
+                                        y: .value("Distanz-Index", point.distanceIndex),
+                                        series: .value("Metrik", "Distanz")
+                                    )
+                                    .foregroundStyle(by: .value("Metrik", "Distanz"))
+
+                                    LineMark(
+                                        x: .value("Datum", point.date),
+                                        y: .value("Pace-Index", point.paceIndex),
+                                        series: .value("Metrik", "Pace")
+                                    )
+                                    .foregroundStyle(by: .value("Metrik", "Pace"))
+
+                                    LineMark(
+                                        x: .value("Datum", point.date),
+                                        y: .value("Gesamt-Index", point.overallIndex),
+                                        series: .value("Metrik", "Gesamt")
+                                    )
+                                    .foregroundStyle(by: .value("Metrik", "Gesamt"))
+                                    .lineStyle(StrokeStyle(lineWidth: 3))
+                                }
                             }
-                            .frame(height: 250)
+                            .chartYScale(domain: .automatic(includesZero: false))
+                            .chartLegend(position: .bottom, alignment: .leading)
+                            .frame(height: 280)
+
+                            Text("Index 100 = dein erster erfasster Lauf. Distanz und Pace werden auf dieselbe Skala normiert; der Gesamtwert kombiniert beide.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -434,6 +479,36 @@ struct RunStatsDetailView: View {
                         HStack {
                             metric(title: "Ø PACE", value: weightedPace > 0 ? "\(formatPace(weightedPace)) /km" : "—")
                             Spacer()
+                            metric(title: "GESAMTINDEX", value: latestOverall.map { RunProgressMetric.text($0) } ?? "—")
+                        }
+                    }
+                }
+
+                if !validRuns.isEmpty {
+                    LockedCard {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("EINZELWERTE")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+
+                            ForEach(validRuns.reversed(), id: \.id) { run in
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(run.date.formatted(date: .abbreviated, time: .omitted))
+                                            .font(.subheadline.weight(.semibold))
+                                        Text("\(run.distanceKm.cleanWeight) km · \(formatPace(run.paceSecondsPerKm)) /km")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    Text(formatLongDuration(run.durationSeconds))
+                                        .font(.subheadline.monospacedDigit())
+                                }
+                            }
+
+                            Text("Herzfrequenz wird hier ergänzt, sobald eine spätere Datenquelle sie zuverlässig liefert.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -474,9 +549,27 @@ struct RunStatsDetailView: View {
 
 struct StepStatsDetailView: View {
     @Query(sort: \StepRecord.date) private var records: [StepRecord]
+    @State private var selectedRange: StepRange = .week
+
+    private enum StepRange: String, CaseIterable, Identifiable {
+        case day = "Tag"
+        case week = "Woche"
+        case month = "Monat"
+        case sixMonths = "6 Mon."
+        case year = "Jahr"
+
+        var id: String { rawValue }
+    }
+
+    private struct StepBarPoint: Identifiable {
+        let id = UUID()
+        let date: Date
+        let steps: Int
+    }
+
+    private var calendar: Calendar { Calendar.current }
 
     private var dailyTotals: [(date: Date, steps: Int)] {
-        let calendar = Calendar.current
         let grouped = Dictionary(grouping: records) { calendar.startOfDay(for: $0.date) }
         return grouped
             .map { date, items in
@@ -485,71 +578,169 @@ struct StepStatsDetailView: View {
             .sorted { $0.date < $1.date }
     }
 
-    private var totalSteps: Int {
-        dailyTotals.reduce(0) { $0 + $1.steps }
+    private var chartPoints: [StepBarPoint] {
+        let now = Date()
+
+        switch selectedRange {
+        case .day:
+            let today = calendar.startOfDay(for: now)
+            let value = dailyTotals.first(where: { calendar.isDate($0.date, inSameDayAs: today) })?.steps ?? 0
+            return [StepBarPoint(date: today, steps: value)]
+
+        case .week:
+            guard let interval = calendar.dateInterval(of: .weekOfYear, for: now) else { return [] }
+            return pointsPerDay(in: interval)
+
+        case .month:
+            guard let interval = calendar.dateInterval(of: .month, for: now) else { return [] }
+            return pointsPerDay(in: interval)
+
+        case .sixMonths:
+            guard let start = calendar.date(byAdding: .month, value: -5, to: calendar.date(from: calendar.dateComponents([.year, .month], from: now)) ?? now) else { return [] }
+            let grouped = Dictionary(grouping: dailyTotals.filter { $0.date >= start }) {
+                calendar.dateInterval(of: .weekOfYear, for: $0.date)?.start ?? $0.date
+            }
+            return grouped.map { key, items in
+                StepBarPoint(date: key, steps: items.reduce(0) { $0 + $1.steps })
+            }.sorted { $0.date < $1.date }
+
+        case .year:
+            guard let interval = calendar.dateInterval(of: .year, for: now) else { return [] }
+            let grouped = Dictionary(grouping: dailyTotals.filter { interval.contains($0.date) }) {
+                calendar.date(from: calendar.dateComponents([.year, .month], from: $0.date)) ?? $0.date
+            }
+            return grouped.map { key, items in
+                StepBarPoint(date: key, steps: items.reduce(0) { $0 + $1.steps })
+            }.sorted { $0.date < $1.date }
+        }
     }
 
-    private var averageSteps: Double {
-        dailyTotals.isEmpty ? 0 : Double(totalSteps) / Double(dailyTotals.count)
+    private var selectedTotal: Int {
+        chartPoints.reduce(0) { $0 + $1.steps }
     }
 
-    private var trendPoints: [StepAveragePoint] {
-        guard !dailyTotals.isEmpty else { return [] }
+    private var selectedAverage: Double {
+        switch selectedRange {
+        case .sixMonths, .year:
+            let relevantDays = relevantDailyTotals
+            return relevantDays.isEmpty ? 0 : Double(relevantDays.reduce(0) { $0 + $1.steps }) / Double(relevantDays.count)
+        default:
+            let nonFuture = chartPoints.filter { $0.date <= Date() }
+            return nonFuture.isEmpty ? 0 : Double(nonFuture.reduce(0) { $0 + $1.steps }) / Double(nonFuture.count)
+        }
+    }
 
-        var runningTotal = 0
-        return dailyTotals.enumerated().map { index, item in
-            runningTotal += item.steps
-            return StepAveragePoint(
-                date: item.date,
-                averageSteps: Double(runningTotal) / Double(index + 1)
-            )
+    private var relevantDailyTotals: [(date: Date, steps: Int)] {
+        let now = Date()
+        switch selectedRange {
+        case .day:
+            return dailyTotals.filter { calendar.isDateInToday($0.date) }
+        case .week:
+            guard let interval = calendar.dateInterval(of: .weekOfYear, for: now) else { return [] }
+            return dailyTotals.filter { interval.contains($0.date) }
+        case .month:
+            guard let interval = calendar.dateInterval(of: .month, for: now) else { return [] }
+            return dailyTotals.filter { interval.contains($0.date) }
+        case .sixMonths:
+            guard let start = calendar.date(byAdding: .month, value: -5, to: calendar.date(from: calendar.dateComponents([.year, .month], from: now)) ?? now) else { return [] }
+            return dailyTotals.filter { $0.date >= start && $0.date <= now }
+        case .year:
+            guard let interval = calendar.dateInterval(of: .year, for: now) else { return [] }
+            return dailyTotals.filter { interval.contains($0.date) }
+        }
+    }
+
+    private var averageColor: Color {
+        switch Int(selectedAverage.rounded()) {
+        case ...4_000: return .red
+        case 4_001..<7_500: return .yellow
+        default: return Color.lockedGreen
         }
     }
 
     var body: some View {
         ScrollView {
             VStack(spacing: 14) {
+                Picker("Zeitraum", selection: $selectedRange) {
+                    ForEach(StepRange.allCases) { range in
+                        Text(range.rawValue).tag(range)
+                    }
+                }
+                .pickerStyle(.segmented)
+
                 LockedCard {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("GESAMTDURCHSCHNITT")
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("DURCHSCHNITT")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
 
-                        Text(averageSteps > 0 ? "Ø \(Int(averageSteps.rounded()).formatted())" : "—")
-                            .font(.system(size: 36, weight: .bold, design: .rounded))
+                        Text(selectedAverage > 0 ? "Ø \(Int(selectedAverage.rounded()).formatted()) Schritte" : "—")
+                            .font(.system(size: 34, weight: .bold, design: .rounded))
                             .monospacedDigit()
-                            .foregroundStyle(averageSteps >= 10_000 ? Color.lockedGreen : .primary)
+                            .foregroundStyle(selectedAverage > 0 ? averageColor : .primary)
 
                         Text("Ziel: 10.000 Schritte pro Tag")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
 
-                        if !trendPoints.isEmpty {
-                            Chart(trendPoints) { point in
-                                LineMark(
-                                    x: .value("Datum", point.date),
-                                    y: .value("Ø Schritte", point.averageSteps)
+                        if !chartPoints.isEmpty {
+                            Chart(chartPoints) { point in
+                                BarMark(
+                                    x: .value("Zeitraum", point.date),
+                                    y: .value("Schritte", point.steps)
                                 )
                                 .foregroundStyle(Color.lockedGreen)
 
-                                RuleMark(y: .value("Ziel", 10_000))
-                                    .foregroundStyle(.secondary)
-                                    .lineStyle(StrokeStyle(dash: [5, 5]))
+                                if selectedRange == .day || selectedRange == .week || selectedRange == .month {
+                                    RuleMark(y: .value("Ziel", 10_000))
+                                        .foregroundStyle(.secondary)
+                                        .lineStyle(StrokeStyle(dash: [5, 5]))
+                                }
                             }
-                            .frame(height: 250)
+                            .chartXAxis {
+                                AxisMarks(values: .automatic(desiredCount: selectedRange == .week ? 7 : 6)) { value in
+                                    AxisValueLabel(format: xAxisFormat)
+                                }
+                            }
+                            .frame(height: 270)
                         }
                     }
                 }
-                .frame(maxWidth: .infinity)
 
                 LockedCard {
-                    HStack {
-                        metric(title: "ERFASSTE TAGE", value: dailyTotals.count.formatted())
-                        Spacer()
-                        metric(title: "GESAMTSCHRITTE", value: totalSteps.formatted())
+                    VStack(spacing: 14) {
+                        HStack {
+                            metric(title: "ERFASSTE TAGE", value: relevantDailyTotals.count.formatted())
+                            Spacer()
+                            metric(title: "GESAMTSCHRITTE", value: relevantDailyTotals.reduce(0) { $0 + $1.steps }.formatted())
+                        }
+
+                        Divider().overlay(Color.lockedBorder)
+
+                        HStack {
+                            metric(title: "BESTER TAG", value: relevantDailyTotals.map(\.steps).max()?.formatted() ?? "—")
+                            Spacer()
+                            metric(title: "SCHWÄCHSTER TAG", value: relevantDailyTotals.map(\.steps).min()?.formatted() ?? "—")
+                        }
                     }
                 }
-                .frame(maxWidth: .infinity)
+
+                if !relevantDailyTotals.isEmpty {
+                    LockedCard {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("DETAILS")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+
+                            ForEach(relevantDailyTotals.reversed(), id: \.date) { item in
+                                LabeledContent(item.date.formatted(date: .abbreviated, time: .omitted)) {
+                                    Text(item.steps.formatted())
+                                        .monospacedDigit()
+                                }
+                            }
+                        }
+                    }
+                }
             }
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 16)
@@ -558,6 +749,25 @@ struct StepStatsDetailView: View {
         .background(Color.black)
         .navigationTitle("Steps")
         .lockedSwipeBack()
+    }
+
+    private var xAxisFormat: Date.FormatStyle {
+        switch selectedRange {
+        case .day, .week: return .dateTime.weekday(.narrow)
+        case .month: return .dateTime.day()
+        case .sixMonths: return .dateTime.month(.abbreviated)
+        case .year: return .dateTime.month(.abbreviated)
+        }
+    }
+
+    private func pointsPerDay(in interval: DateInterval) -> [StepBarPoint] {
+        let start = calendar.startOfDay(for: interval.start)
+        let days = calendar.dateComponents([.day], from: start, to: interval.end).day ?? 0
+        return (0..<days).compactMap { offset in
+            guard let day = calendar.date(byAdding: .day, value: offset, to: start) else { return nil }
+            let steps = dailyTotals.first(where: { calendar.isDate($0.date, inSameDayAs: day) })?.steps ?? 0
+            return StepBarPoint(date: day, steps: steps)
+        }
     }
 
     private func metric(title: String, value: String) -> some View {
