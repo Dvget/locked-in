@@ -7,8 +7,8 @@ settings:
   base:
     PRODUCT_BUNDLE_IDENTIFIER: app.lockedin.tracker
     SWIFT_VERSION: 5.0
-    CURRENT_PROJECT_VERSION: 19
-    MARKETING_VERSION: 0.4.3
+    CURRENT_PROJECT_VERSION: 20
+    MARKETING_VERSION: 0.5
 targets:
   LockedIn:
     type: application
