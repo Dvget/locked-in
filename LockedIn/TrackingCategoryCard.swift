@@ -26,19 +26,22 @@ struct TrackingCategoryCard: View {
     var showsChevron: Bool = true
     var minContentHeight: CGFloat = 72
     var dashboardEmphasis: Bool = false
+    var primaryColor: Color? = nil
+    var iconAccent: Bool? = nil
 
     var body: some View {
         LockedCard {
             HStack(spacing: dashboardEmphasis ? 16 : 14) {
+                let useIconAccent = iconAccent ?? accent
                 Image(systemName: category.icon)
-                    .font(dashboardEmphasis ? .title2.weight(.semibold) : .title3.weight(.semibold))
-                    .foregroundStyle(accent ? Color.lockedGreen : .secondary)
+                    .font(dashboardEmphasis ? .title.weight(.semibold) : .title3.weight(.semibold))
+                    .foregroundStyle(useIconAccent ? Color.lockedGreen : .secondary)
                     .frame(
-                        width: dashboardEmphasis ? 54 : 44,
-                        height: dashboardEmphasis ? 54 : 44
+                        width: dashboardEmphasis ? 62 : 44,
+                        height: dashboardEmphasis ? 62 : 44
                     )
-                    .background((accent ? Color.lockedGreen : Color.white).opacity(0.08))
-                    .clipShape(RoundedRectangle(cornerRadius: dashboardEmphasis ? 14 : 12, style: .continuous))
+                    .background((useIconAccent ? Color.lockedGreen : Color.white).opacity(0.08))
+                    .clipShape(RoundedRectangle(cornerRadius: dashboardEmphasis ? 16 : 12, style: .continuous))
 
                 VStack(alignment: .leading, spacing: dashboardEmphasis ? 7 : 5) {
                     Text(category.rawValue.uppercased())
@@ -47,7 +50,7 @@ struct TrackingCategoryCard: View {
 
                     Text(primary)
                         .font(dashboardEmphasis ? .title2.bold() : .title3.bold())
-                        .foregroundStyle(accent ? Color.lockedGreen : .primary)
+                        .foregroundStyle(primaryColor ?? (accent ? Color.lockedGreen : Color.primary))
 
                     Text(secondary)
                         .font(dashboardEmphasis ? .subheadline : .caption)
