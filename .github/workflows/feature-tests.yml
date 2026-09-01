@@ -1,0 +1,16 @@
+name: Test LOCKED IN 0.5 Analytics
+
+on:
+  push:
+    branches: [ codex/locked-in-0.5 ]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run analytics tests
+        run: swift test
