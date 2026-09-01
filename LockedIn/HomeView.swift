@@ -7,6 +7,7 @@ struct HomeView: View {
     @Query private var sets: [SetRecord]
     @Query(sort: \RunRecord.date, order: .reverse) private var runs: [RunRecord]
     @Query(sort: \StepRecord.date, order: .reverse) private var steps: [StepRecord]
+    @Query(sort: \WeightRecord.date, order: .reverse) private var weights: [WeightRecord]
 
     @State private var showPlan = false
     @State private var resumedWorkout: ActiveWorkoutState?
@@ -26,6 +27,11 @@ struct HomeView: View {
     private var workoutsThisWeek: Int {
         guard let interval = currentWeekInterval else { return 0 }
         return completed.filter { interval.contains($0.startedAt) }.count
+    }
+
+    private var runsThisWeek: Int {
+        guard let interval = currentWeekInterval else { return 0 }
+        return runs.filter { interval.contains($0.date) }.count
     }
 
     private var weeklyProgress: Double? {
@@ -60,6 +66,13 @@ struct HomeView: View {
         totalStepsThisWeek / elapsedDaysThisWeek
     }
 
+    private var strengthProgressColor: Color {
+        guard let weeklyProgress else { return .secondary }
+        if weeklyProgress > 0.0001 { return Color.lockedGreen }
+        if weeklyProgress < -0.0001 { return .red }
+        return .yellow
+    }
+
     private var stepStatusColor: Color {
         switch averageStepsThisWeek {
         case ...4_000: return .red
@@ -70,66 +83,93 @@ struct HomeView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 12) {
-                BrandHeader()
-                    .frame(height: 28)
+            GeometryReader { geo in
+                let spacing: CGFloat = 10
+                let headerHeight: CGFloat = 30
+                let verticalPadding: CGFloat = 8
+                let available = geo.size.height - headerHeight - verticalPadding * 2 - spacing * 5
+                let cardHeight = max(92, available / 5)
 
-                if unfinishedWorkout != nil {
-                    resumeCard
-                        .frame(height: 96)
-                        .padding(.horizontal, -2)
-                } else {
-                    startCard
-                        .frame(height: 96)
-                        .padding(.horizontal, -2)
+                VStack(spacing: spacing) {
+                    BrandHeader()
+                        .frame(height: headerHeight)
+
+                    if unfinishedWorkout != nil {
+                        resumeCard
+                            .frame(height: cardHeight)
+                    } else {
+                        startCard
+                            .frame(height: cardHeight)
+                    }
+
+                    NavigationLink {
+                        StrengthStatsDetailView()
+                    } label: {
+                        TrackingCategoryCard(
+                            category: .strength,
+                            primary: "\(workoutsThisWeek) / 2",
+                            secondary: "Wochenfortschritt \(StrengthProgressMetric.text(weeklyProgress))",
+                            accent: true,
+                            minContentHeight: max(68, cardHeight - 32),
+                            dashboardEmphasis: true,
+                            primaryColor: Color.lockedGreen,
+                            secondaryColor: strengthProgressColor,
+                            iconAccent: false
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .frame(height: cardHeight)
+
+                    NavigationLink {
+                        RunStatsDetailView()
+                    } label: {
+                        TrackingCategoryCard(
+                            category: .runs,
+                            primary: "\(runsThisWeek) / 2",
+                            secondary: "Wochenziel",
+                            minContentHeight: max(68, cardHeight - 32),
+                            dashboardEmphasis: true,
+                            iconAccent: false
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .frame(height: cardHeight)
+
+                    NavigationLink {
+                        StepCurrentOverviewView()
+                    } label: {
+                        TrackingCategoryCard(
+                            category: .steps,
+                            primary: stepsThisWeek.isEmpty ? "Noch keine Daten" : "Ø \(averageStepsThisWeek.formatted()) / 10.000",
+                            secondary: stepsThisWeek.isEmpty ? "Steps synchronisieren" : "\(totalStepsThisWeek.formatted()) Schritte diese Woche",
+                            minContentHeight: max(68, cardHeight - 32),
+                            dashboardEmphasis: true,
+                            primaryColor: stepsThisWeek.isEmpty ? nil : stepStatusColor,
+                            iconAccent: false
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .frame(height: cardHeight)
+
+                    NavigationLink {
+                        WeightStatsDetailView()
+                    } label: {
+                        TrackingCategoryCard(
+                            category: .weight,
+                            primary: "Übersicht öffnen",
+                            secondary: "Gewichtsentwicklung",
+                            minContentHeight: max(68, cardHeight - 32),
+                            dashboardEmphasis: true,
+                            iconAccent: false
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .frame(height: cardHeight)
                 }
-
-                NavigationLink {
-                    StrengthCurrentOverviewView()
-                } label: {
-                    TrackingCategoryCard(
-                        category: .strength,
-                        primary: "\(workoutsThisWeek) / 2",
-                        secondary: "Diese Woche · Fortschritt \(StrengthProgressMetric.text(weeklyProgress))",
-                        accent: true,
-                        minContentHeight: 104,
-                        dashboardEmphasis: true
-                    )
-                }
-                .buttonStyle(.plain)
-
-                NavigationLink {
-                    RunCurrentOverviewView()
-                } label: {
-                    TrackingCategoryCard(
-                        category: .runs,
-                        primary: runs.first.map { "\($0.distanceKm.cleanWeight) km" } ?? "Noch nicht verbunden",
-                        secondary: "Aktuelle Laufdaten",
-                        minContentHeight: 104,
-                        dashboardEmphasis: true
-                    )
-                }
-                .buttonStyle(.plain)
-
-                NavigationLink {
-                    StepCurrentOverviewView()
-                } label: {
-                    TrackingCategoryCard(
-                        category: .steps,
-                        primary: stepsThisWeek.isEmpty ? "Noch nicht verbunden" : "Ø \(averageStepsThisWeek.formatted()) / 10.000",
-                        secondary: stepsThisWeek.isEmpty ? "Diese Woche" : "Diese Woche · \(totalStepsThisWeek.formatted()) Schritte",
-                        minContentHeight: 104,
-                        dashboardEmphasis: true,
-                        primaryColor: stepsThisWeek.isEmpty ? nil : stepStatusColor,
-                        iconAccent: false
-                    )
-                }
-                .buttonStyle(.plain)
-
-                Spacer(minLength: 0)
+                .padding(.horizontal, 14)
+                .padding(.vertical, verticalPadding)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
             .background(Color.black)
             .sheet(isPresented: $showPlan) { WorkoutPlanView() }
             .fullScreenCover(item: $resumedWorkout) { workoutState in
@@ -320,24 +360,37 @@ struct RunCurrentOverviewView: View {
 struct StepCurrentOverviewView: View {
     @Query(sort: \StepRecord.date) private var records: [StepRecord]
 
-    private var calendar: Calendar { Calendar.current }
+    private struct DayPoint: Identifiable {
+        let id: Int
+        let label: String
+        let date: Date
+        let steps: Int
+    }
+
+    private var calendar: Calendar {
+        var value = Calendar.current
+        value.firstWeekday = 2
+        return value
+    }
 
     private var currentWeek: DateInterval? {
         calendar.dateInterval(of: .weekOfYear, for: Date())
     }
 
-    private var dailyTotals: [(date: Date, steps: Int)] {
+    private var dailyTotals: [DayPoint] {
         guard let interval = currentWeek else { return [] }
         let grouped = Dictionary(grouping: records) { calendar.startOfDay(for: $0.date) }
+        let labels = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+        let start = calendar.startOfDay(for: interval.start)
 
         return (0..<7).compactMap { offset in
-            guard let day = calendar.date(byAdding: .day, value: offset, to: calendar.startOfDay(for: interval.start)) else { return nil }
+            guard let day = calendar.date(byAdding: .day, value: offset, to: start) else { return nil }
             let total = grouped[day]?.reduce(0) { $0 + $1.steps } ?? 0
-            return (day, total)
+            return DayPoint(id: offset, label: labels[offset], date: day, steps: total)
         }
     }
 
-    private var elapsedDailyTotals: [(date: Date, steps: Int)] {
+    private var elapsedDailyTotals: [DayPoint] {
         let today = calendar.startOfDay(for: Date())
         return dailyTotals.filter { $0.date <= today }
     }
@@ -394,70 +447,80 @@ struct StepCurrentOverviewView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 14) {
-                LockedCard {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("DIESE WOCHE")
-                            .font(.caption.weight(.semibold))
+        VStack(spacing: 12) {
+            LockedCard {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("DIESE WOCHE")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Ø \(averageStepsThisWeek.formatted())")
+                            .font(.system(size: 34, weight: .bold, design: .rounded))
+                            .monospacedDigit()
+                            .foregroundStyle(averageColor)
+                        Text("/ 10.000")
+                            .font(.headline)
                             .foregroundStyle(.secondary)
-
-                        HStack(alignment: .firstTextBaseline) {
-                            Text("Ø \(averageStepsThisWeek.formatted())")
-                                .font(.system(size: 34, weight: .bold, design: .rounded))
-                                .monospacedDigit()
-                                .foregroundStyle(averageColor)
-                            Text("/ 10.000")
-                                .font(.headline)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Chart(dailyTotals, id: \.date) { item in
-                            BarMark(
-                                x: .value("Tag", item.date, unit: .day),
-                                y: .value("Schritte", item.steps)
-                            )
-                            .foregroundStyle(Color.lockedGreen)
-
-                            RuleMark(y: .value("Ziel", 10_000))
-                                .foregroundStyle(.secondary)
-                                .lineStyle(StrokeStyle(dash: [5, 5]))
-                        }
-                        .chartXAxis {
-                            AxisMarks(values: .stride(by: .day)) { value in
-                                AxisValueLabel(format: .dateTime.weekday(.narrow))
-                            }
-                        }
-                        .frame(height: 230)
                     }
-                }
 
-                LockedCard {
-                    VStack(spacing: 12) {
-                        LabeledContent("Wochenziel") {
-                            Text("70.000 Schritte").monospacedDigit()
-                        }
-                        Divider().overlay(Color.lockedBorder)
-                        LabeledContent("Bisher gesamt") {
-                            Text(totalStepsThisWeek.formatted()).monospacedDigit()
-                        }
-                        Divider().overlay(Color.lockedBorder)
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text("VERGLEICH")
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                            Text(comparisonText)
-                                .font(.headline)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Chart(dailyTotals) { item in
+                        BarMark(
+                            x: .value("Tag", item.label),
+                            y: .value("Schritte", item.steps)
+                        )
+                        .foregroundStyle(Color.lockedGreen)
+
+                        RuleMark(y: .value("Ziel", 10_000))
+                            .foregroundStyle(.secondary)
+                            .lineStyle(StrokeStyle(dash: [5, 5]))
                     }
+                    .chartXScale(domain: ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"])
+                    .chartXAxis {
+                        AxisMarks(values: ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"])
+                    }
+                    .frame(maxHeight: .infinity)
+                    .frame(minHeight: 220)
                 }
-
-                FullHistoryButton { StepHistoryView() }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+
+            LockedCard {
+                VStack(spacing: 10) {
+                    LabeledContent("Wochenziel") {
+                        Text("70.000 Schritte").monospacedDigit()
+                    }
+                    Divider().overlay(Color.lockedBorder)
+                    LabeledContent("Bisher gesamt") {
+                        Text(totalStepsThisWeek.formatted()).monospacedDigit()
+                    }
+                    Divider().overlay(Color.lockedBorder)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("VERGLEICH")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        Text(comparisonText)
+                            .font(.headline)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+
+            NavigationLink {
+                StepStatsDetailView()
+            } label: {
+                LockedCard {
+                    HStack {
+                        Text("Statistik ansehen")
+                            .font(.headline)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                    }
+                }
+            }
+            .buttonStyle(.plain)
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
         .background(Color.black)
         .navigationTitle("Steps")
         .lockedSwipeBack()
