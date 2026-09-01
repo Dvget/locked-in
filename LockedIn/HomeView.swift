@@ -20,8 +20,14 @@ struct HomeView: View {
         workouts.first(where: { !$0.isCompleted })
     }
 
+    private var trackingCalendar: Calendar {
+        var calendar = Calendar.current
+        calendar.firstWeekday = 2
+        return calendar
+    }
+
     private var currentWeekInterval: DateInterval? {
-        Calendar.current.dateInterval(of: .weekOfYear, for: Date())
+        trackingCalendar.dateInterval(of: .weekOfYear, for: Date())
     }
 
     private var workoutsThisWeek: Int {
@@ -42,7 +48,8 @@ struct HomeView: View {
                     distanceKm: $0.distanceKm,
                     durationSeconds: $0.durationSeconds
                 )
-            }
+            },
+            calendar: trackingCalendar
         )
     }
 
@@ -89,7 +96,7 @@ struct HomeView: View {
 
     private var elapsedDaysThisWeek: Int {
         guard let interval = currentWeekInterval else { return 1 }
-        let calendar = Calendar.current
+        let calendar = trackingCalendar
         let start = calendar.startOfDay(for: interval.start)
         let today = calendar.startOfDay(for: Date())
         let days = calendar.dateComponents([.day], from: start, to: today).day ?? 0
