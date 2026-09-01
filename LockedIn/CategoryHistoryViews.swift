@@ -431,32 +431,6 @@ struct RunHistoryView: View {
     }
 }
 
-struct StepHistoryView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query(sort: \StepRecord.date, order: .reverse) private var records: [StepRecord]
-    @State private var showAdd = false
-
-    var body: some View {
-        List {
-            ForEach(records) { item in
-                HStack {
-                    Text(item.date.formatted(date: .abbreviated, time: .omitted))
-                    Spacer()
-                    Text(item.steps.formatted()).font(.headline.monospacedDigit())
-                }
-            }
-            .onDelete { offsets in
-                for index in offsets { modelContext.delete(records[index]) }
-                try? modelContext.save()
-            }
-        }
-        .navigationTitle("Steps")
-        .toolbar { ToolbarItem(placement: .topBarTrailing) { Button { showAdd = true } label: { Image(systemName: "plus") } } }
-        .sheet(isPresented: $showAdd) { ManualStepEntryView() }
-        .lockedSwipeBack()
-    }
-}
-
 struct WeightHistoryView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \WeightRecord.date, order: .reverse) private var records: [WeightRecord]
