@@ -437,6 +437,7 @@ struct RunStatsDetailView: View {
 struct StepStatsDetailView: View {
     @Query(sort: \StepRecord.date) private var records: [StepRecord]
     @State private var selectedRange: StepRange = .week
+    @State private var showAdd = false
 
     private enum StepRange: String, CaseIterable, Identifiable {
         case week = "Woche"
@@ -607,6 +608,13 @@ struct StepStatsDetailView: View {
         .padding(.vertical, 10)
         .background(Color.black)
         .navigationTitle("Steps")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { showAdd = true } label: { Image(systemName: "plus") }
+                    .accessibilityLabel("Steps nachtragen")
+            }
+        }
+        .sheet(isPresented: $showAdd) { ManualStepEntryView() }
         .lockedSwipeBack()
     }
 
