@@ -83,93 +83,79 @@ struct HomeView: View {
 
     var body: some View {
         NavigationStack {
-            GeometryReader { geo in
-                let spacing: CGFloat = 10
-                let headerHeight: CGFloat = 30
-                let verticalPadding: CGFloat = 8
-                let available = geo.size.height - headerHeight - verticalPadding * 2 - spacing * 5
-                let cardHeight = max(92, available / 5)
+            VStack(spacing: 10) {
+                BrandHeader()
+                    .frame(height: 30)
 
-                VStack(spacing: spacing) {
-                    BrandHeader()
-                        .frame(height: headerHeight)
-
-                    if unfinishedWorkout != nil {
-                        resumeCard
-                            .frame(height: cardHeight)
-                    } else {
-                        startCard
-                            .frame(height: cardHeight)
-                    }
-
-                    NavigationLink {
-                        StrengthStatsDetailView()
-                    } label: {
-                        TrackingCategoryCard(
-                            category: .strength,
-                            primary: "\(workoutsThisWeek) / 2",
-                            secondary: "Wochenfortschritt \(StrengthProgressMetric.text(weeklyProgress))",
-                            accent: true,
-                            minContentHeight: max(68, cardHeight - 32),
-                            dashboardEmphasis: true,
-                            primaryColor: Color.lockedGreen,
-                            secondaryColor: strengthProgressColor,
-                            iconAccent: false
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .frame(height: cardHeight)
-
-                    NavigationLink {
-                        RunStatsDetailView()
-                    } label: {
-                        TrackingCategoryCard(
-                            category: .runs,
-                            primary: "\(runsThisWeek) / 2",
-                            secondary: "Wochenziel",
-                            minContentHeight: max(68, cardHeight - 32),
-                            dashboardEmphasis: true,
-                            iconAccent: false
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .frame(height: cardHeight)
-
-                    NavigationLink {
-                        StepCurrentOverviewView()
-                    } label: {
-                        TrackingCategoryCard(
-                            category: .steps,
-                            primary: stepsThisWeek.isEmpty ? "Noch keine Daten" : "Ø \(averageStepsThisWeek.formatted()) / 10.000",
-                            secondary: stepsThisWeek.isEmpty ? "Steps synchronisieren" : "\(totalStepsThisWeek.formatted()) Schritte diese Woche",
-                            minContentHeight: max(68, cardHeight - 32),
-                            dashboardEmphasis: true,
-                            primaryColor: stepsThisWeek.isEmpty ? nil : stepStatusColor,
-                            iconAccent: false
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .frame(height: cardHeight)
-
-                    NavigationLink {
-                        WeightStatsDetailView()
-                    } label: {
-                        TrackingCategoryCard(
-                            category: .weight,
-                            primary: "Übersicht öffnen",
-                            secondary: "Gewichtsentwicklung",
-                            minContentHeight: max(68, cardHeight - 32),
-                            dashboardEmphasis: true,
-                            iconAccent: false
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .frame(height: cardHeight)
+                if unfinishedWorkout != nil {
+                    resumeCard
+                        .frame(height: 92)
+                } else {
+                    startCard
+                        .frame(height: 92)
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, verticalPadding)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+
+                NavigationLink {
+                    StrengthStatsDetailView()
+                } label: {
+                    TrackingCategoryCard(
+                        category: .strength,
+                        primary: "\(workoutsThisWeek) / 2",
+                        secondary: "Wochenfortschritt \(StrengthProgressMetric.text(weeklyProgress))",
+                        accent: true,
+                        minContentHeight: 100,
+                        dashboardEmphasis: true,
+                        primaryColor: Color.lockedGreen,
+                        secondaryColor: strengthProgressColor,
+                        iconAccent: false
+                    )
+                }
+                .buttonStyle(.plain)
+                .frame(height: 132)
+
+                NavigationLink {
+                    RunStatsDetailView()
+                } label: {
+                    TrackingCategoryCard(
+                        category: .runs,
+                        primary: "\(runsThisWeek) / 2",
+                        secondary: "Wochenziel",
+                        minContentHeight: 100,
+                        dashboardEmphasis: true,
+                        iconAccent: false
+                    )
+                }
+                .buttonStyle(.plain)
+                .frame(height: 132)
+
+                NavigationLink {
+                    StepCurrentOverviewView()
+                } label: {
+                    TrackingCategoryCard(
+                        category: .steps,
+                        primary: stepsThisWeek.isEmpty ? "Noch keine Daten" : "Ø \(averageStepsThisWeek.formatted()) / 10.000",
+                        secondary: stepsThisWeek.isEmpty ? "Steps synchronisieren" : "\(totalStepsThisWeek.formatted()) Schritte diese Woche",
+                        minContentHeight: 100,
+                        dashboardEmphasis: true,
+                        primaryColor: stepsThisWeek.isEmpty ? nil : stepStatusColor,
+                        iconAccent: false
+                    )
+                }
+                .buttonStyle(.plain)
+                .frame(height: 132)
+
+                NavigationLink {
+                    WeightStatsDetailView()
+                } label: {
+                    weightCard
+                }
+                .buttonStyle(.plain)
+                .frame(height: 92)
+
+                Spacer(minLength: 0)
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
             .background(Color.black)
             .sheet(isPresented: $showPlan) { WorkoutPlanView() }
             .fullScreenCover(item: $resumedWorkout) { workoutState in
@@ -177,6 +163,37 @@ struct HomeView: View {
                     resumedWorkout = nil
                 }
             }
+        }
+    }
+
+    private var weightCard: some View {
+        LockedCard {
+            HStack(spacing: 14) {
+                Image(systemName: TrackingCategory.weight.icon)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 54, height: 54)
+                    .background(Color.white.opacity(0.08))
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("GEWICHT")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Text("Übersicht")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    Text("Wochentrend & Waage")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
         }
     }
 
@@ -264,96 +281,6 @@ struct HomeView: View {
                 timerEndDate: nil
             )
         }
-    }
-}
-
-struct StrengthCurrentOverviewView: View {
-    @Query(sort: \WorkoutRecord.startedAt, order: .reverse) private var workouts: [WorkoutRecord]
-    @Query private var sets: [SetRecord]
-
-    private var recent: [WorkoutRecord] {
-        guard let interval = Calendar.current.dateInterval(of: .weekOfYear, for: Date()) else { return [] }
-        return workouts.filter { $0.isCompleted && !$0.isHidden && interval.contains($0.startedAt) }
-    }
-
-    var body: some View {
-        List {
-            Section("Diese Woche") {
-                if recent.isEmpty {
-                    Text("Noch kein Krafttraining in dieser Woche.")
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(recent, id: \.id) { workout in
-                        NavigationLink {
-                            WorkoutDetailView(workout: workout)
-                        } label: {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text("Full Body").font(.headline)
-                                    Text(workout.startedAt.formatted(date: .abbreviated, time: .omitted))
-                                        .font(.subheadline)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                let progress = StrengthProgressMetric.workoutProgress(
-                                    workout: workout,
-                                    workouts: workouts,
-                                    sets: sets
-                                )
-                                Text(StrengthProgressMetric.text(progress))
-                                    .font(.headline.monospacedDigit())
-                                    .foregroundStyle(StrengthProgressStyle.color(for: progress))
-                            }
-                        }
-                    }
-                }
-            }
-
-            Section {
-                FullHistoryButton { StrengthHistoryView() }
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-            }
-        }
-        .navigationTitle("Krafttraining")
-        .lockedSwipeBack()
-    }
-}
-
-struct RunCurrentOverviewView: View {
-    @Query(sort: \RunRecord.date, order: .reverse) private var runs: [RunRecord]
-
-    private var recent: [RunRecord] {
-        guard let interval = Calendar.current.dateInterval(of: .weekOfYear, for: Date()) else { return [] }
-        return runs.filter { interval.contains($0.date) }
-    }
-
-    var body: some View {
-        List {
-            Section("Diese Woche") {
-                if recent.isEmpty {
-                    Text("Noch keine Laufdaten in dieser Woche.")
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(recent) { run in
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("\(run.distanceKm.cleanWeight) km").font(.headline)
-                            Text(run.date.formatted(date: .abbreviated, time: .omitted))
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-            }
-
-            Section {
-                FullHistoryButton { RunHistoryView() }
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-            }
-        }
-        .navigationTitle("Läufe")
-        .lockedSwipeBack()
     }
 }
 
