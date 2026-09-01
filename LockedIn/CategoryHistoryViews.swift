@@ -2,9 +2,12 @@ import SwiftUI
 import SwiftData
 
 struct StrengthHistoryView: View {
+    @Environment(\.modelContext) private var modelContext
     @Query(sort: \WorkoutRecord.startedAt, order: .reverse) private var workouts: [WorkoutRecord]
     @Query private var sets: [SetRecord]
     @State private var showAdd = false
+    @State private var editingWorkout: WorkoutRecord?
+    @State private var pendingDeleteWorkout: WorkoutRecord?
 
     private var completed: [WorkoutRecord] { workouts.filter(\.isCompleted) }
 
@@ -16,7 +19,14 @@ struct StrengthHistoryView: View {
                 } label: {
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Full Body").font(.headline)
+                            HStack(spacing: 6) {
+                                Text("Full Body").font(.headline)
+                                if workout.isHidden {
+                                    Image(systemName: "eye.slash")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
                             Text(workout.startedAt.formatted(date: .abbreviated, time: .omitted))
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
@@ -25,16 +35,47 @@ struct StrengthHistoryView: View {
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
-                        let progress = StrengthProgressMetric.workoutProgress(
-                            workout: workout,
-                            workouts: workouts,
-                            sets: sets
-                        )
-                        Text(StrengthProgressMetric.text(progress))
-                            .font(.title3.bold().monospacedDigit())
-                            .foregroundStyle(StrengthProgressStyle.color(for: progress))
+                        if workout.isHidden {
+                            Text("Ausgeblendet")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        } else {
+                            let progress = StrengthProgressMetric.workoutProgress(
+                                workout: workout,
+                                workouts: workouts,
+                                sets: sets
+                            )
+                            Text(StrengthProgressMetric.text(progress))
+                                .font(.title3.bold().monospacedDigit())
+                                .foregroundStyle(StrengthProgressStyle.color(for: progress))
+                        }
                     }
                     .padding(.vertical, 8)
+                    .opacity(workout.isHidden ? 0.55 : 1)
+                }
+                .contextMenu {
+                    Button {
+                        editingWorkout = workout
+                    } label: {
+                        Label("Bearbeiten", systemImage: "pencil")
+                    }
+
+                    Button {
+                        workout.isHidden.toggle()
+                        try? modelContext.save()
+                        try? AutomaticBackup.backup(modelContext: modelContext)
+                    } label: {
+                        Label(
+                            workout.isHidden ? "Einblenden" : "Ausblenden",
+                            systemImage: workout.isHidden ? "eye" : "eye.slash"
+                        )
+                    }
+
+                    Button(role: .destructive) {
+                        pendingDeleteWorkout = workout
+                    } label: {
+                        Label("Löschen", systemImage: "trash")
+                    }
                 }
             }
         }
@@ -45,7 +86,31 @@ struct StrengthHistoryView: View {
             }
         }
         .sheet(isPresented: $showAdd) { ManualStrengthEntryView() }
+        .sheet(item: $editingWorkout) { workout in
+            TrainingEditSheet(workout: workout)
+        }
+        .alert("Training löschen?", isPresented: Binding(
+            get: { pendingDeleteWorkout != nil },
+            set: { if !$0 { pendingDeleteWorkout = nil } }
+        )) {
+            Button("Abbrechen", role: .cancel) { pendingDeleteWorkout = nil }
+            Button("Löschen", role: .destructive) {
+                if let workout = pendingDeleteWorkout {
+                    deleteWorkout(workout)
+                }
+                pendingDeleteWorkout = nil
+            }
+        } message: {
+            Text("Das Training und alle zugehörigen Sätze werden dauerhaft gelöscht.")
+        }
         .lockedSwipeBack()
+    }
+
+    private func deleteWorkout(_ workout: WorkoutRecord) {
+        sets.filter { $0.workoutID == workout.id }.forEach { modelContext.delete($0) }
+        modelContext.delete(workout)
+        try? modelContext.save()
+        try? AutomaticBackup.backup(modelContext: modelContext)
     }
 }
 
@@ -398,36 +463,102 @@ struct RunHistoryView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \RunRecord.date, order: .reverse) private var runs: [RunRecord]
     @State private var showAdd = false
+    @State private var editingRun: RunRecord?
+    @State private var pendingDeleteRun: RunRecord?
 
     var body: some View {
         List {
             ForEach(runs) { run in
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(run.date.formatted(date: .abbreviated, time: .omitted)).font(.headline)
-                    Text("\(run.distanceKm.cleanWeight) km · \(formatDuration(run.durationSeconds)) · \(pace(run)) /km")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 6) {
+                            Text("Lauf").font(.headline)
+                            if run.isHidden {
+                                Image(systemName: "eye.slash")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        Text(run.date.formatted(date: .abbreviated, time: .omitted))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Text("\(run.distanceKm.cleanWeight) km · \(pace(run)) /km · \(formatDuration(run.durationSeconds))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    if run.isHidden {
+                        Text("Ausgeblendet")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("\(pace(run))")
+                            .font(.title3.bold().monospacedDigit())
+                    }
                 }
-            }
-            .onDelete { offsets in
-                for index in offsets { modelContext.delete(runs[index]) }
-                try? modelContext.save()
+                .padding(.vertical, 8)
+                .opacity(run.isHidden ? 0.55 : 1)
+                .contentShape(Rectangle())
+                .contextMenu {
+                    Button {
+                        editingRun = run
+                    } label: {
+                        Label("Bearbeiten", systemImage: "pencil")
+                    }
+
+                    Button {
+                        run.isHidden.toggle()
+                        try? modelContext.save()
+                        try? AutomaticBackup.backup(modelContext: modelContext)
+                    } label: {
+                        Label(run.isHidden ? "Einblenden" : "Ausblenden", systemImage: run.isHidden ? "eye" : "eye.slash")
+                    }
+
+                    Button(role: .destructive) {
+                        pendingDeleteRun = run
+                    } label: {
+                        Label("Löschen", systemImage: "trash")
+                    }
+                }
             }
         }
         .navigationTitle("Läufe")
-        .toolbar { ToolbarItem(placement: .topBarTrailing) { Button { showAdd = true } label: { Image(systemName: "plus") } } }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { showAdd = true } label: { Image(systemName: "plus") }
+            }
+        }
         .sheet(isPresented: $showAdd) { ManualRunEntryView() }
+        .sheet(item: $editingRun) { run in RunEditSheet(run: run) }
+        .alert("Lauf löschen?", isPresented: Binding(
+            get: { pendingDeleteRun != nil },
+            set: { if !$0 { pendingDeleteRun = nil } }
+        )) {
+            Button("Abbrechen", role: .cancel) { pendingDeleteRun = nil }
+            Button("Löschen", role: .destructive) {
+                if let run = pendingDeleteRun {
+                    modelContext.delete(run)
+                    try? modelContext.save()
+                    try? AutomaticBackup.backup(modelContext: modelContext)
+                }
+                pendingDeleteRun = nil
+            }
+        }
         .lockedSwipeBack()
     }
 
     private func formatDuration(_ seconds: Double) -> String {
-        let total = Int(seconds)
-        return String(format: "%d:%02d", total / 60, total % 60)
+        let total = Int(seconds.rounded())
+        let hours = total / 3600
+        let minutes = (total % 3600) / 60
+        let secs = total % 60
+        return hours > 0 ? String(format: "%d:%02d:%02d", hours, minutes, secs) : String(format: "%d:%02d", minutes, secs)
     }
 
     private func pace(_ run: RunRecord) -> String {
-        let total = Int(run.paceSecondsPerKm)
-        return String(format: "%d:%02d", total / 60, total % 60)
+        formatPace(run.paceSecondsPerKm)
     }
 }
 
@@ -435,25 +566,110 @@ struct WeightHistoryView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \WeightRecord.date, order: .reverse) private var records: [WeightRecord]
     @State private var showAdd = false
+    @State private var editingWeight: WeightRecord?
+    @State private var pendingDeleteWeight: WeightRecord?
 
     var body: some View {
         List {
-            ForEach(records) { item in
+            ForEach(Array(records.enumerated()), id: \.element.id) { index, item in
                 HStack {
-                    Text(item.date.formatted(date: .abbreviated, time: .omitted))
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 6) {
+                            Text("\(item.weightKg.cleanWeight) kg")
+                                .font(.headline.monospacedDigit())
+                            if item.isHidden {
+                                Image(systemName: "eye.slash")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        Text(item.date.formatted(date: .abbreviated, time: .omitted))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+
                     Spacer()
-                    Text("\(item.weightKg.cleanWeight) kg").font(.headline.monospacedDigit())
+
+                    if item.isHidden {
+                        Text("Ausgeblendet")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    } else if let delta = deltaForVisibleRecord(at: index) {
+                        Text(signedWeight(delta))
+                            .font(.title3.bold().monospacedDigit())
+                            .foregroundStyle(deltaColor(delta))
+                    } else {
+                        Text("—")
+                            .foregroundStyle(.secondary)
+                    }
                 }
-            }
-            .onDelete { offsets in
-                for index in offsets { modelContext.delete(records[index]) }
-                try? modelContext.save()
+                .padding(.vertical, 8)
+                .opacity(item.isHidden ? 0.55 : 1)
+                .contentShape(Rectangle())
+                .contextMenu {
+                    Button {
+                        editingWeight = item
+                    } label: {
+                        Label("Bearbeiten", systemImage: "pencil")
+                    }
+
+                    Button {
+                        item.isHidden.toggle()
+                        try? modelContext.save()
+                        try? AutomaticBackup.backup(modelContext: modelContext)
+                    } label: {
+                        Label(item.isHidden ? "Einblenden" : "Ausblenden", systemImage: item.isHidden ? "eye" : "eye.slash")
+                    }
+
+                    Button(role: .destructive) {
+                        pendingDeleteWeight = item
+                    } label: {
+                        Label("Löschen", systemImage: "trash")
+                    }
+                }
             }
         }
         .navigationTitle("Gewicht")
-        .toolbar { ToolbarItem(placement: .topBarTrailing) { Button { showAdd = true } label: { Image(systemName: "plus") } } }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { showAdd = true } label: { Image(systemName: "plus") }
+            }
+        }
         .sheet(isPresented: $showAdd) { ManualWeightEntryView() }
+        .sheet(item: $editingWeight) { item in WeightEditSheet(record: item) }
+        .alert("Messung löschen?", isPresented: Binding(
+            get: { pendingDeleteWeight != nil },
+            set: { if !$0 { pendingDeleteWeight = nil } }
+        )) {
+            Button("Abbrechen", role: .cancel) { pendingDeleteWeight = nil }
+            Button("Löschen", role: .destructive) {
+                if let item = pendingDeleteWeight {
+                    modelContext.delete(item)
+                    try? modelContext.save()
+                    try? AutomaticBackup.backup(modelContext: modelContext)
+                }
+                pendingDeleteWeight = nil
+            }
+        }
         .lockedSwipeBack()
+    }
+
+    private func deltaForVisibleRecord(at index: Int) -> Double? {
+        guard records.indices.contains(index), !records[index].isHidden else { return nil }
+        let current = records[index]
+        guard let older = records[(index + 1)...].first(where: { !$0.isHidden }) else { return nil }
+        return current.weightKg - older.weightKg
+    }
+
+    private func signedWeight(_ value: Double) -> String {
+        if abs(value) < 0.05 { return "0,0 kg" }
+        return String(format: "%+.1f kg", value).replacingOccurrences(of: ".", with: ",")
+    }
+
+    private func deltaColor(_ value: Double) -> Color {
+        if value < -0.05 { return Color.lockedGreen }
+        if value > 0.05 { return .red }
+        return .yellow
     }
 }
 
@@ -462,16 +678,13 @@ struct ManualRunEntryView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var date = Date()
     @State private var distanceKm = 5.0
-    @State private var paceMinutes = 6
-    @State private var paceSeconds = 0
+    @State private var paceText = "6:00"
     @State private var showDatePicker = false
 
-    private var paceTotalSeconds: Int {
-        max(1, paceMinutes * 60 + paceSeconds)
-    }
+    private var paceTotalSeconds: Int? { parsePace(paceText) }
 
     private var calculatedDuration: Double {
-        max(0.01, distanceKm) * Double(paceTotalSeconds)
+        max(0.01, distanceKm) * Double(paceTotalSeconds ?? 0)
     }
 
     var body: some View {
@@ -485,18 +698,14 @@ struct ManualRunEntryView: View {
                     TextField("Distanz in km", value: $distanceKm, format: .number.precision(.fractionLength(0...2)))
                         .keyboardType(.decimalPad)
 
-                    Stepper("Pace Minuten: \(paceMinutes)", value: $paceMinutes, in: 2...20)
-                    Stepper("Pace Sekunden: \(paceSeconds)", value: $paceSeconds, in: 0...59)
+                    TextField("Pace, z. B. 5:42", text: $paceText)
+                        .keyboardType(.numbersAndPunctuation)
+                        .monospacedDigit()
 
-                    LabeledContent("Pace") {
-                        Text(String(format: "%d:%02d /km", paceMinutes, paceSeconds))
-                            .monospacedDigit()
-                    }
-
-                    LabeledContent("Berechnete Dauer") {
-                        Text(formatDuration(calculatedDuration))
-                            .monospacedDigit()
-                            .foregroundStyle(.secondary)
+                    if paceTotalSeconds == nil {
+                        Text("Pace bitte als Minuten:Sekunden eingeben, z. B. 5:42.")
+                            .font(.footnote)
+                            .foregroundStyle(.red)
                     }
                 }
             }
@@ -505,6 +714,7 @@ struct ManualRunEntryView: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Speichern") {
+                        guard paceTotalSeconds != nil else { return }
                         modelContext.insert(
                             RunRecord(
                                 date: date,
@@ -516,6 +726,7 @@ struct ManualRunEntryView: View {
                         try? AutomaticBackup.backup(modelContext: modelContext)
                         dismiss()
                     }
+                    .disabled(paceTotalSeconds == nil || distanceKm <= 0)
                 }
             }
             .sheet(isPresented: $showDatePicker) {
@@ -524,16 +735,62 @@ struct ManualRunEntryView: View {
             }
         }
     }
+}
 
-    private func formatDuration(_ seconds: Double) -> String {
-        let total = Int(seconds.rounded())
-        let hours = total / 3600
-        let minutes = (total % 3600) / 60
-        let secs = total % 60
-        if hours > 0 {
-            return String(format: "%d:%02d:%02d", hours, minutes, secs)
+private struct RunEditSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    let run: RunRecord
+
+    @State private var date: Date
+    @State private var distanceKm: Double
+    @State private var paceText: String
+    @State private var showDatePicker = false
+
+    init(run: RunRecord) {
+        self.run = run
+        _date = State(initialValue: run.date)
+        _distanceKm = State(initialValue: run.distanceKm)
+        _paceText = State(initialValue: formatPace(run.paceSecondsPerKm))
+    }
+
+    private var paceSeconds: Int? { parsePace(paceText) }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Button { showDatePicker = true } label: {
+                    LabeledContent("Datum", value: date.formatted(date: .abbreviated, time: .omitted))
+                }
+
+                TextField("Distanz in km", value: $distanceKm, format: .number.precision(.fractionLength(0...2)))
+                    .keyboardType(.decimalPad)
+
+                TextField("Pace, z. B. 5:42", text: $paceText)
+                    .keyboardType(.numbersAndPunctuation)
+                    .monospacedDigit()
+            }
+            .navigationTitle("Lauf bearbeiten")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Speichern") {
+                        guard let paceSeconds else { return }
+                        run.date = date
+                        run.distanceKm = max(0.01, distanceKm)
+                        run.durationSeconds = run.distanceKm * Double(paceSeconds)
+                        try? modelContext.save()
+                        try? AutomaticBackup.backup(modelContext: modelContext)
+                        dismiss()
+                    }
+                    .disabled(paceSeconds == nil || distanceKm <= 0)
+                }
+            }
+            .sheet(isPresented: $showDatePicker) {
+                AutoDismissDatePicker(date: $date, isPresented: $showDatePicker, title: "Lauftag")
+                    .presentationDetents([.medium])
+            }
         }
-        return String(format: "%d:%02d", minutes, secs)
     }
 }
 
@@ -560,6 +817,7 @@ struct ManualStepEntryView: View {
                     Button("Speichern") {
                         modelContext.insert(StepRecord(date: date, steps: max(0, steps)))
                         try? modelContext.save()
+                        try? AutomaticBackup.backup(modelContext: modelContext)
                         dismiss()
                     }
                 }
@@ -575,9 +833,12 @@ struct ManualStepEntryView: View {
 struct ManualWeightEntryView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Query(sort: \WeightRecord.date, order: .reverse) private var records: [WeightRecord]
+
     @State private var date = Date()
     @State private var weightKg = 90.0
     @State private var showDatePicker = false
+    @State private var seededWeight = false
 
     var body: some View {
         NavigationStack {
@@ -595,6 +856,59 @@ struct ManualWeightEntryView: View {
                     Button("Speichern") {
                         modelContext.insert(WeightRecord(date: date, weightKg: max(20, weightKg)))
                         try? modelContext.save()
+                        try? AutomaticBackup.backup(modelContext: modelContext)
+                        dismiss()
+                    }
+                }
+            }
+            .onAppear {
+                guard !seededWeight else { return }
+                seededWeight = true
+                if let latest = records.first(where: { !$0.isHidden }) {
+                    weightKg = latest.weightKg
+                }
+            }
+            .sheet(isPresented: $showDatePicker) {
+                AutoDismissDatePicker(date: $date, isPresented: $showDatePicker, title: "Wiegetag")
+                    .presentationDetents([.medium])
+            }
+        }
+    }
+}
+
+private struct WeightEditSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    let record: WeightRecord
+
+    @State private var date: Date
+    @State private var weightKg: Double
+    @State private var showDatePicker = false
+
+    init(record: WeightRecord) {
+        self.record = record
+        _date = State(initialValue: record.date)
+        _weightKg = State(initialValue: record.weightKg)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Button { showDatePicker = true } label: {
+                    LabeledContent("Datum", value: date.formatted(date: .abbreviated, time: .omitted))
+                }
+                TextField("Gewicht in kg", value: $weightKg, format: .number.precision(.fractionLength(1)))
+                    .keyboardType(.decimalPad)
+            }
+            .navigationTitle("Gewicht bearbeiten")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Speichern") {
+                        record.date = date
+                        record.weightKg = max(20, weightKg)
+                        try? modelContext.save()
+                        try? AutomaticBackup.backup(modelContext: modelContext)
                         dismiss()
                     }
                 }
@@ -605,4 +919,22 @@ struct ManualWeightEntryView: View {
             }
         }
     }
+}
+
+private func parsePace(_ text: String) -> Int? {
+    let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    let parts = normalized.split(separator: ":")
+    guard parts.count == 2,
+          let minutes = Int(parts[0]),
+          let seconds = Int(parts[1]),
+          minutes >= 0,
+          seconds >= 0,
+          seconds < 60,
+          minutes > 0 || seconds > 0 else { return nil }
+    return minutes * 60 + seconds
+}
+
+private func formatPace(_ seconds: Double) -> String {
+    let total = max(0, Int(seconds.rounded()))
+    return String(format: "%d:%02d", total / 60, total % 60)
 }
