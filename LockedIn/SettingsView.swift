@@ -123,6 +123,7 @@ struct SettingsView: View {
             .scrollContentBackground(.hidden)
             .background(Color.black)
             .navigationTitle("Einstellungen")
+        }
 
         .sheet(isPresented: $showFolderPicker) {
             FolderPicker { url in
