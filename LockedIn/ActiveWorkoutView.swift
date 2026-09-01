@@ -65,7 +65,7 @@ struct ActiveWorkoutView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 14) {
+                VStack(spacing: 10) {
                     exerciseHeader
                     timerSection
                     previousPerformanceCard
@@ -75,8 +75,9 @@ struct ActiveWorkoutView: View {
                     todaysSetsCard
                     previousExerciseButton
                 }
-                .padding()
-                .padding(.bottom, 20)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .padding(.bottom, 16)
             }
             .background(Color.black)
             .toolbar { workoutToolbar }
@@ -159,7 +160,18 @@ struct ActiveWorkoutView: View {
 
     private var timerSection: some View {
         LockedCard {
-            RestTimerView(
+            VStack(spacing: 6) {
+                HStack {
+                    Text("Gesamtzeit")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Text(state.startedAt, style: .timer)
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
+
+                RestTimerView(
                 remainingSeconds: $remainingSeconds,
                 isRunning: $timerRunning,
                 defaultSeconds: defaultRestSeconds,
@@ -167,7 +179,8 @@ struct ActiveWorkoutView: View {
                 skip: skipTimer,
                 reset: resetTimerForCurrentExercise,
                 add30: { adjustTimer(by: 30) }
-            )
+                )
+            }
         }
     }
 
@@ -305,16 +318,6 @@ struct ActiveWorkoutView: View {
 
     @ToolbarContentBuilder
     private var workoutToolbar: some ToolbarContent {
-        ToolbarItem(placement: .topBarLeading) {
-            VStack(alignment: .leading, spacing: 0) {
-                Text(state.startedAt, style: .timer)
-                    .font(.headline.monospacedDigit())
-                Text("Gesamtzeit")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-        }
-
         ToolbarItem(placement: .principal) {
             EmptyView()
         }
@@ -419,7 +422,7 @@ struct ActiveWorkoutView: View {
     }
 
     private func signalTimerFinished() {
-        AudioServicesPlaySystemSound(1005)
+        RestTimerAudioAlert.shared.play()
         AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
         UINotificationFeedbackGenerator().notificationOccurred(.success)
     }
