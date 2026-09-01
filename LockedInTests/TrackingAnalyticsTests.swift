@@ -41,7 +41,7 @@ final class TrackingAnalyticsTests: XCTestCase {
         let now = date("2026-09-01")
         let samples = [
             TrackingAnalytics.RunSample(date: date("2026-08-25"), distanceKm: 5, durationSeconds: 1_800),
-            TrackingAnalytics.RunSample(date: date("2026-09-01"), distanceKm: 6.05, durationSeconds: 1_980)
+            TrackingAnalytics.RunSample(date: date("2026-09-01"), distanceKm: 5.5, durationSeconds: 1_800)
         ]
 
         let change = TrackingAnalytics.weeklyRunChange(
