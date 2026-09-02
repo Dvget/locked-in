@@ -259,13 +259,6 @@ struct ExerciseStatsView: View {
         ExerciseCatalog.exercise(id: exerciseID)
     }
 
-    private var exerciseChartColors: [String: Color] {
-        if exercise?.repsOnly == true {
-            return ["Reps": .orange]
-        }
-        return ["Gewicht": Color.lockedGreen, "Reps": .orange]
-    }
-
     private var points: [ExerciseProgressPoint] {
         workouts
             .filter { $0.isCompleted && !$0.isHidden }
@@ -435,27 +428,41 @@ struct ExerciseStatsView: View {
     }
 
     private var exerciseChart: some View {
-        Chart {
-            ForEach(points) { point in
-                if let weight = point.maximumWeightKg, exercise?.repsOnly != true {
-                    weightMarks(point: point, weight: weight)
+        VStack(alignment: .leading, spacing: 8) {
+            Chart {
+                ForEach(points) { point in
+                    if let weight = point.maximumWeightKg, exercise?.repsOnly != true {
+                        weightMarks(point: point, weight: weight)
+                    }
+                    repsMarks(point: point)
                 }
-                repsMarks(point: point)
             }
-        }
-        .chartForegroundStyleScale(exerciseChartColors)
-        .chartLegend(position: .bottom, alignment: .leading, spacing: 12)
-        .chartYAxis {
-            AxisMarks { value in
-                AxisGridLine()
-                AxisValueLabel {
-                    if let number = value.as(Double.self) {
-                        Text(String(format: "%.0f", number))
+            .chartLegend(.hidden)
+            .chartYAxis {
+                AxisMarks { value in
+                    AxisGridLine()
+                    AxisValueLabel {
+                        if let number = value.as(Double.self) {
+                            Text(String(format: "%.0f", number))
+                        }
                     }
                 }
             }
+            .frame(height: 225)
+
+            exerciseChartLegend
         }
-        .frame(height: 250)
+    }
+
+    private var exerciseChartLegend: some View {
+        HStack(spacing: 16) {
+            if exercise?.repsOnly != true {
+                chartLegendItem(title: "Gewicht", color: Color.lockedGreen)
+            }
+            chartLegendItem(title: "Reps", color: .orange)
+        }
+        .font(.caption.weight(.semibold))
+        .foregroundStyle(.secondary)
     }
 
     @ChartContentBuilder
@@ -465,14 +472,14 @@ struct ExerciseStatsView: View {
             y: .value("Wert", weight),
             series: .value("Metrik", "Gewicht")
         )
-        .foregroundStyle(by: .value("Metrik", "Gewicht"))
+        .foregroundStyle(Color.lockedGreen)
         .lineStyle(StrokeStyle(lineWidth: 3))
 
         PointMark(
             x: .value("Datum", point.date),
             y: .value("Wert", weight)
         )
-        .foregroundStyle(by: .value("Metrik", "Gewicht"))
+        .foregroundStyle(Color.lockedGreen)
     }
 
     @ChartContentBuilder
@@ -482,14 +489,23 @@ struct ExerciseStatsView: View {
             y: .value("Wert", point.totalReps),
             series: .value("Metrik", "Reps")
         )
-        .foregroundStyle(by: .value("Metrik", "Reps"))
+        .foregroundStyle(Color.orange)
         .lineStyle(StrokeStyle(lineWidth: 3))
 
         PointMark(
             x: .value("Datum", point.date),
             y: .value("Wert", point.totalReps)
         )
-        .foregroundStyle(by: .value("Metrik", "Reps"))
+        .foregroundStyle(Color.orange)
+    }
+
+    private func chartLegendItem(title: String, color: Color) -> some View {
+        HStack(spacing: 6) {
+            Capsule()
+                .fill(color)
+                .frame(width: 18, height: 4)
+            Text(title)
+        }
     }
 
     private func exerciseMetric(
