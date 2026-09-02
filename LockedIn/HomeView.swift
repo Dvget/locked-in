@@ -171,7 +171,7 @@ struct HomeView: View {
                     TrackingCategoryCard(
                         category: .steps,
                         primary: averageStepsThisWeek.map { "Ø \($0.formatted()) Schritte" } ?? "Noch keine Daten",
-                        secondary: averageStepsThisWeek == nil ? "Noch kein abgeschlossener Tag" : "Durchschnitt bis gestern",
+                        secondary: averageStepsThisWeek == nil ? "Noch kein abgeschlossener Tag" : "Wochenschnitt",
                         minContentHeight: 100,
                         dashboardEmphasis: true,
                         primaryColor: averageStepsThisWeek == nil ? nil : stepStatusColor,
