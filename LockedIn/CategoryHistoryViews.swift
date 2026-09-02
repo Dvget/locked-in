@@ -816,42 +816,6 @@ private struct RunEditSheet: View {
     }
 }
 
-struct ManualStepEntryView: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
-    @State private var date = Date()
-    @State private var steps = 8000
-    @State private var showDatePicker = false
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Button { showDatePicker = true } label: {
-                    LabeledContent("Datum", value: date.formatted(date: .abbreviated, time: .omitted))
-                }
-                TextField("Schritte", value: $steps, format: .number)
-                    .keyboardType(.numberPad)
-            }
-            .navigationTitle("Steps nachtragen")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Speichern") {
-                        modelContext.insert(StepRecord(date: date, steps: max(0, steps)))
-                        try? modelContext.save()
-                        try? AutomaticBackup.backup(modelContext: modelContext)
-                        dismiss()
-                    }
-                }
-            }
-            .sheet(isPresented: $showDatePicker) {
-                AutoDismissDatePicker(date: $date, isPresented: $showDatePicker, title: "Tag")
-                    .presentationDetents([.medium])
-            }
-        }
-    }
-}
-
 struct ManualWeightEntryView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext

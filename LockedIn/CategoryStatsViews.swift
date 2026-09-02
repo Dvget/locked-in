@@ -1084,8 +1084,10 @@ struct WeightStatsDetailView: View {
                                     if let date = value.as(Date.self) {
                                         if historySpanDays < 60 {
                                             Text(date.formatted(.dateTime.day().month(.abbreviated)))
-                                        } else if historySpanDays < 730 {
+                                        } else if historySpanDays < 365 {
                                             Text(date.formatted(.dateTime.month(.abbreviated)))
+                                        } else if historySpanDays < 730 {
+                                            Text(date.formatted(.dateTime.month(.abbreviated).year(.twoDigits)))
                                         } else {
                                             Text(date.formatted(.dateTime.year()))
                                         }
