@@ -120,6 +120,31 @@ final class TrackingAnalyticsTests: XCTestCase {
         XCTAssertEqual(preferred.first?.source, "coremotion")
     }
 
+    func testRecordedStepAverageUsesOnlyDaysWithSamples() {
+        let samples = [
+            TrackingAnalytics.StepSample(date: date("2026-08-31"), steps: 10_000, source: "coremotion"),
+            TrackingAnalytics.StepSample(date: date("2026-09-01"), steps: 4_000, source: "coremotion")
+        ]
+
+        XCTAssertEqual(
+            TrackingAnalytics.recordedStepAverage(samples, calendar: calendar),
+            7_000
+        )
+    }
+
+    func testRecordedStepAverageStillPrefersOneCoreMotionValuePerDay() {
+        let samples = [
+            TrackingAnalytics.StepSample(date: date("2026-08-31"), steps: 8_000, source: "manual"),
+            TrackingAnalytics.StepSample(date: date("2026-08-31"), steps: 10_000, source: "coremotion"),
+            TrackingAnalytics.StepSample(date: date("2026-09-01"), steps: 4_000, source: "coremotion")
+        ]
+
+        XCTAssertEqual(
+            TrackingAnalytics.recordedStepAverage(samples, calendar: calendar),
+            7_000
+        )
+    }
+
     func testStepProgressStatusUsesElapsedWeeklyTarget() {
         XCTAssertEqual(
             TrackingAnalytics.stepProgressStatus(steps: 10_000, elapsedDays: 2),
@@ -168,6 +193,43 @@ final class TrackingAnalyticsTests: XCTestCase {
         ])
 
         XCTAssertEqual(volume, 680, accuracy: 0.001)
+    }
+
+    func testExerciseWorkoutMetricsUseHighestWeightAndTotalRepetitions() {
+        let metrics = TrackingAnalytics.exerciseWorkoutMetrics([
+            .init(weightKg: 60, reps: 8),
+            .init(weightKg: 62, reps: 7),
+            .init(weightKg: 60, reps: 6),
+            .init(weightKg: 100, reps: 0)
+        ], repsOnly: false)
+
+        XCTAssertEqual(metrics.maximumWeightKg, 62)
+        XCTAssertEqual(metrics.totalReps, 21)
+    }
+
+    func testExerciseWorkoutMetricsHideWeightForRepsOnlyExercise() {
+        let metrics = TrackingAnalytics.exerciseWorkoutMetrics([
+            .init(weightKg: 20, reps: 5),
+            .init(weightKg: 20, reps: 4),
+            .init(weightKg: 20, reps: 3)
+        ], repsOnly: true)
+
+        XCTAssertNil(metrics.maximumWeightKg)
+        XCTAssertEqual(metrics.totalReps, 12)
+    }
+
+    func testPercentageChangeUsesRawMetricDirection() {
+        XCTAssertEqual(
+            TrackingAnalytics.percentageChange(from: 50, to: 60)!,
+            20,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            TrackingAnalytics.percentageChange(from: 10, to: 8)!,
+            -20,
+            accuracy: 0.001
+        )
+        XCTAssertNil(TrackingAnalytics.percentageChange(from: 0, to: 10))
     }
 
     func testDefaultWeightRangeFollowsHistorySpan() {
