@@ -67,7 +67,7 @@ struct StrengthStatsDetailView: View {
     }
 
     private var volumePoints: [ProgressPoint] {
-        completedWorkouts.compactMap { workout in
+        completedWorkouts.map { workout in
             let samples = sets
                 .filter { $0.workoutID == workout.id && $0.reps > 0 }
                 .map { set in
@@ -78,7 +78,6 @@ struct StrengthStatsDetailView: View {
                     )
                 }
             let volume = TrackingAnalytics.trainingVolume(samples)
-            guard volume > 0 else { return nil }
             return ProgressPoint(date: workout.startedAt, value: volume)
         }
     }
@@ -90,7 +89,8 @@ struct StrengthStatsDetailView: View {
     }
 
     var body: some View {
-        VStack(spacing: 10) {
+        ScrollView {
+            VStack(spacing: 10) {
             Picker("Statistik", selection: $selectedSeries) {
                 ForEach(StrengthSeries.allCases) { series in
                     Text(series.rawValue).tag(series)
@@ -214,10 +214,12 @@ struct StrengthStatsDetailView: View {
             }
             .buttonStyle(LockedActionButtonStyle())
 
-            Spacer(minLength: 0)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .scrollIndicators(.hidden)
         .background(Color.black)
         .navigationTitle("Krafttraining")
         .sheet(isPresented: $showAdd) { ManualStrengthEntryView() }
@@ -500,7 +502,8 @@ struct RunStatsDetailView: View {
     }
 
     var body: some View {
-        VStack(spacing: 9) {
+        ScrollView {
+            VStack(spacing: 9) {
             Picker("Wert", selection: $selectedSeries) {
                 ForEach(RunSeries.allCases) { series in
                     Text(series.rawValue).tag(series)
@@ -632,10 +635,12 @@ struct RunStatsDetailView: View {
                 .buttonStyle(LockedActionButtonStyle())
             }
 
-            Spacer(minLength: 0)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .scrollIndicators(.hidden)
         .background(Color.black)
         .navigationTitle("Läufe")
         .sheet(isPresented: $showAdd) { ManualRunEntryView() }
