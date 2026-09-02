@@ -59,6 +59,16 @@ enum TrackingAnalytics {
         let repsOnly: Bool
     }
 
+    struct ExerciseSetSample {
+        let weightKg: Double
+        let reps: Int
+    }
+
+    struct ExerciseWorkoutMetrics {
+        let maximumWeightKg: Double?
+        let totalReps: Int
+    }
+
     struct StepBucket: Identifiable {
         let date: Date
         let label: String
@@ -188,6 +198,15 @@ enum TrackingAnalytics {
         .sorted { $0.date < $1.date }
     }
 
+    static func recordedStepAverage(
+        _ samples: [StepSample],
+        calendar: Calendar = .current
+    ) -> Int? {
+        let preferred = preferredStepSamples(samples, calendar: calendar)
+        guard !preferred.isEmpty else { return nil }
+        return preferred.reduce(0) { $0 + $1.steps } / preferred.count
+    }
+
     static func stepBuckets(
         _ samples: [StepSample],
         range: Range,
@@ -280,6 +299,26 @@ enum TrackingAnalytics {
             guard !sample.repsOnly, sample.weightKg > 0, sample.reps > 0 else { return total }
             return total + sample.weightKg * Double(sample.reps)
         }
+    }
+
+    static func exerciseWorkoutMetrics(
+        _ samples: [ExerciseSetSample],
+        repsOnly: Bool
+    ) -> ExerciseWorkoutMetrics {
+        let completed = samples.filter { $0.reps > 0 }
+        let maximumWeight = repsOnly
+            ? nil
+            : completed.map(\.weightKg).filter { $0 > 0 }.max()
+
+        return ExerciseWorkoutMetrics(
+            maximumWeightKg: maximumWeight,
+            totalReps: completed.reduce(0) { $0 + $1.reps }
+        )
+    }
+
+    static func percentageChange(from first: Double, to last: Double) -> Double? {
+        guard first > 0 else { return nil }
+        return ((last / first) - 1) * 100
     }
 
     static func defaultWeightRange(

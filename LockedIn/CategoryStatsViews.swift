@@ -239,6 +239,14 @@ struct ExerciseStatsView: View {
     @Query private var sets: [SetRecord]
     @State private var selectedSlotID = 1
     @State private var selectedExerciseID: String?
+    @State private var selectedMetric: ExerciseMetric = .weight
+
+    private enum ExerciseMetric: String, CaseIterable, Identifiable {
+        case weight = "Gewicht"
+        case reps = "Reps"
+
+        var id: String { rawValue }
+    }
 
     private var slot: PlanSlotDefinition {
         ExerciseCatalog.slot(id: selectedSlotID) ?? ExerciseCatalog.slots[0]
@@ -248,54 +256,80 @@ struct ExerciseStatsView: View {
         selectedExerciseID ?? slot.defaultExerciseID
     }
 
+    private var exercise: ExerciseDefinition? {
+        ExerciseCatalog.exercise(id: exerciseID)
+    }
+
+    private var effectiveMetric: ExerciseMetric {
+        exercise?.repsOnly == true ? .reps : selectedMetric
+    }
+
     private var points: [ProgressPoint] {
-        let relevantWorkouts = workouts
+        workouts
             .filter { $0.isCompleted && !$0.isHidden }
-            .filter { workout in
-                sets.contains {
-                    $0.workoutID == workout.id &&
-                    $0.exerciseID == exerciseID &&
-                    $0.reps > 0
-                }
-            }
             .sorted { $0.startedAt < $1.startedAt }
+            .compactMap { workout in
+                let workoutSets = sets
+                    .filter {
+                        $0.workoutID == workout.id &&
+                        $0.exerciseID == exerciseID &&
+                        $0.reps > 0
+                    }
+                    .map {
+                        TrackingAnalytics.ExerciseSetSample(
+                            weightKg: $0.weight,
+                            reps: $0.reps
+                        )
+                    }
+                guard !workoutSets.isEmpty else { return nil }
 
-        guard let first = relevantWorkouts.first else { return [] }
-        var dates = [first.startedAt]
-        var changes: [Double] = []
-
-        for workout in relevantWorkouts.dropFirst() {
-            if let change = StrengthProgressMetric.exerciseProgress(
-                    exerciseID: exerciseID,
-                    workout: workout,
-                    workouts: workouts,
-                    sets: sets
-            ) {
-                dates.append(workout.startedAt)
-                changes.append(change)
+                let metrics = TrackingAnalytics.exerciseWorkoutMetrics(
+                    workoutSets,
+                    repsOnly: exercise?.repsOnly ?? false
+                )
+                let value: Double
+                switch effectiveMetric {
+                case .weight:
+                    guard let weight = metrics.maximumWeightKg else { return nil }
+                    value = weight
+                case .reps:
+                    value = Double(metrics.totalReps)
+                }
+                guard value > 0 else { return nil }
+                return ProgressPoint(date: workout.startedAt, value: value)
             }
-        }
-
-        let values = TrackingAnalytics.cumulativeIndex(changes: changes)
-        return zip(dates, values).map { ProgressPoint(date: $0.0, value: $0.1) }
     }
 
     private var current: Double? { points.last?.value }
 
-    private var average: Double? {
-        guard !points.isEmpty else { return nil }
-        return points.map(\.value).reduce(0, +) / Double(points.count)
+    private var development: Double? {
+        guard let first = points.first?.value, let last = points.last?.value, points.count > 1 else {
+            return nil
+        }
+        return TrackingAnalytics.percentageChange(from: first, to: last)
     }
 
-    private func indexText(_ value: Double?) -> String {
+    private func metricText(_ value: Double?) -> String {
         guard let value else { return "—" }
-        return String(format: "%.1f", value).replacingOccurrences(of: ".", with: ",")
+        switch effectiveMetric {
+        case .weight:
+            return "\(value.cleanWeight) kg"
+        case .reps:
+            return "\(Int(value.rounded()).formatted()) Reps"
+        }
     }
 
-    private func indexColor(_ value: Double?) -> Color {
-        guard let value else { return .secondary }
-        if value > 100.05 { return Color.lockedGreen }
-        if value < 99.95 { return .red }
+    private var developmentText: String {
+        guard let development else { return "—" }
+        if abs(development) < 0.05 { return "0,0 %" }
+        return String(format: "%+.1f %%", development)
+            .replacingOccurrences(of: ".", with: ",")
+    }
+
+    private var developmentColor: Color {
+        guard let development else { return .secondary }
+        if development > 0.05 { return Color.lockedGreen }
+        if development < -0.05 { return .red }
         return .yellow
     }
 
@@ -321,6 +355,9 @@ struct ExerciseStatsView: View {
                         .frame(maxWidth: .infinity)
                         .onChange(of: selectedSlotID) {
                             selectedExerciseID = nil
+                            selectedMetric = ExerciseCatalog.exercise(id: slot.defaultExerciseID)?.repsOnly == true
+                                ? .reps
+                                : .weight
                         }
 
                         Divider().overlay(Color.lockedBorder)
@@ -328,7 +365,12 @@ struct ExerciseStatsView: View {
                         HStack {
                             Picker("Variante", selection: Binding(
                                 get: { exerciseID },
-                                set: { selectedExerciseID = $0 }
+                                set: {
+                                    selectedExerciseID = $0
+                                    selectedMetric = ExerciseCatalog.exercise(id: $0)?.repsOnly == true
+                                        ? .reps
+                                        : .weight
+                                }
                             )) {
                                 ForEach(slot.exercises) { exercise in
                                     Text(exercise.shortName).tag(exercise.id)
@@ -342,26 +384,35 @@ struct ExerciseStatsView: View {
                     }
                 }
 
+                if exercise?.repsOnly != true {
+                    Picker("Metrik", selection: $selectedMetric) {
+                        ForEach(ExerciseMetric.allCases) { metric in
+                            Text(metric.rawValue).tag(metric)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
+
                 LockedCard {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
                             VStack(alignment: .leading, spacing: 3) {
-                                Text("LEISTUNGSINDEX")
+                                Text(effectiveMetric == .weight ? "HÖCHSTES ARBEITSGEWICHT" : "WIEDERHOLUNGEN GESAMT")
                                     .font(.caption.weight(.semibold))
                                     .foregroundStyle(.secondary)
-                                Text(indexText(current))
+                                Text(metricText(current))
                                     .font(.system(size: 34, weight: .bold, design: .rounded))
                                     .monospacedDigit()
-                                    .foregroundStyle(indexColor(current))
+                                    .foregroundStyle(.primary)
                             }
                             Spacer()
                             VStack(alignment: .trailing, spacing: 3) {
-                                Text("Ø")
+                                Text("SEIT BEGINN")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
-                                Text(indexText(average))
+                                Text(developmentText)
                                     .font(.headline.monospacedDigit())
-                                    .foregroundStyle(indexColor(average))
+                                    .foregroundStyle(developmentColor)
                             }
                         }
 
@@ -376,12 +427,12 @@ struct ExerciseStatsView: View {
                             Chart(points) { point in
                                 LineMark(
                                     x: .value("Datum", point.date),
-                                    y: .value("Fortschritt", point.value)
+                                    y: .value(effectiveMetric.rawValue, point.value)
                                 )
                                 .foregroundStyle(Color.lockedGreen)
                                 PointMark(
                                     x: .value("Datum", point.date),
-                                    y: .value("Fortschritt", point.value)
+                                    y: .value(effectiveMetric.rawValue, point.value)
                                 )
                                 .foregroundStyle(Color.lockedGreen)
                             }
@@ -663,7 +714,6 @@ struct RunStatsDetailView: View {
 struct StepStatsDetailView: View {
     @Query(sort: \StepRecord.date) private var records: [StepRecord]
     @State private var selectedRange: StepRange = .week
-    @State private var showAdd = false
 
     private enum StepRange: String, CaseIterable, Identifiable {
         case week = "Woche"
@@ -758,7 +808,10 @@ struct StepStatsDetailView: View {
     }
 
     private var weeklyAverage: Double {
-        Double(currentWeekTotal) / Double(elapsedDaysThisWeek)
+        let samples = currentWeekTotals.map {
+            TrackingAnalytics.StepSample(date: $0.date, steps: $0.steps, source: "preferred")
+        }
+        return Double(TrackingAnalytics.recordedStepAverage(samples, calendar: calendar) ?? 0)
     }
 
     private var weeklyProgressColor: Color {
@@ -889,13 +942,6 @@ struct StepStatsDetailView: View {
         .padding(.vertical, 10)
         .background(Color.black)
         .navigationTitle("Steps")
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button { showAdd = true } label: { Image(systemName: "plus") }
-                    .accessibilityLabel("Steps nachtragen")
-            }
-        }
-        .sheet(isPresented: $showAdd) { ManualStepEntryView() }
         .lockedSwipeBack()
     }
 
@@ -915,8 +961,6 @@ struct WeightStatsDetailView: View {
     @Query(sort: \WeightRecord.date) private var records: [WeightRecord]
     @StateObject private var scaleManager = EtekcityScaleManager()
     @State private var showAdd = false
-    @State private var selectedRange: TrackingAnalytics.Range = .month
-    @State private var didChooseInitialRange = false
 
     private var validRecords: [WeightRecord] {
         records.filter { !$0.isHidden && $0.weightKg > 0 }
@@ -935,7 +979,13 @@ struct WeightStatsDetailView: View {
     }
 
     private var displayedPoints: [TrackingAnalytics.WeightPoint] {
-        TrackingAnalytics.weightPoints(weightSamples, range: selectedRange, calendar: calendar)
+        TrackingAnalytics.weightPoints(weightSamples, range: .all, calendar: calendar)
+    }
+
+    private var historySpanDays: Int {
+        guard let first = displayedPoints.first?.weekStart,
+              let last = displayedPoints.last?.weekStart else { return 0 }
+        return calendar.dateComponents([.day], from: first, to: last).day ?? 0
     }
 
     private var chartDomain: ClosedRange<Date> {
@@ -982,13 +1032,6 @@ struct WeightStatsDetailView: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            Picker("Zeitraum", selection: $selectedRange) {
-                ForEach([TrackingAnalytics.Range.month, .year, .all]) { range in
-                    Text(range.rawValue).tag(range)
-                }
-            }
-            .pickerStyle(.segmented)
-
             LockedCard {
                 VStack(alignment: .leading, spacing: 9) {
                     HStack(alignment: .top) {
@@ -1039,15 +1082,12 @@ struct WeightStatsDetailView: View {
                                 AxisGridLine()
                                 AxisValueLabel {
                                     if let date = value.as(Date.self) {
-                                        switch selectedRange {
-                                        case .week:
+                                        if historySpanDays < 60 {
                                             Text(date.formatted(.dateTime.day().month(.abbreviated)))
-                                        case .month:
-                                            Text(date.formatted(.dateTime.day().month(.abbreviated)))
-                                        case .year:
+                                        } else if historySpanDays < 730 {
                                             Text(date.formatted(.dateTime.month(.abbreviated)))
-                                        case .all:
-                                            Text(date.formatted(.dateTime.month(.abbreviated).year(.twoDigits)))
+                                        } else {
+                                            Text(date.formatted(.dateTime.year()))
                                         }
                                     }
                                 }
@@ -1113,17 +1153,6 @@ struct WeightStatsDetailView: View {
             ManualWeightEntryView()
         }
         .onAppear {
-            if !didChooseInitialRange {
-                selectedRange = TrackingAnalytics.defaultWeightRange(
-                    weightSamples,
-                    calendar: calendar
-                )
-                if selectedRange == .week {
-                    selectedRange = .month
-                }
-                didChooseInitialRange = true
-            }
-
             scaleManager.onMeasurement = { weight in
                 let existing = validRecords.filter { $0.source == EtekcityScaleManager.sourceID }
                 for record in existing where abs(record.date.timeIntervalSinceNow) < 120 {

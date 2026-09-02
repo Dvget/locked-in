@@ -90,21 +90,11 @@ struct HomeView: View {
         return preferredSteps.filter { interval.contains($0.date) }
     }
 
-    private var totalStepsThisWeek: Int {
-        stepsThisWeek.reduce(0) { $0 + $1.steps }
-    }
-
-    private var elapsedDaysThisWeek: Int {
-        guard let interval = currentWeekInterval else { return 1 }
-        let calendar = trackingCalendar
-        let start = calendar.startOfDay(for: interval.start)
-        let today = calendar.startOfDay(for: Date())
-        let days = calendar.dateComponents([.day], from: start, to: today).day ?? 0
-        return min(7, max(1, days + 1))
-    }
-
     private var averageStepsThisWeek: Int {
-        totalStepsThisWeek / elapsedDaysThisWeek
+        TrackingAnalytics.recordedStepAverage(
+            stepsThisWeek,
+            calendar: trackingCalendar
+        ) ?? 0
     }
 
     private var strengthProgressColor: Color {
@@ -166,6 +156,7 @@ struct HomeView: View {
                         secondary: runWeekChangeText,
                         minContentHeight: 100,
                         dashboardEmphasis: true,
+                        primaryColor: runsThisWeek > 0 ? Color.lockedGreen : nil,
                         secondaryColor: runWeekChangeColor,
                         iconAccent: false
                     )
