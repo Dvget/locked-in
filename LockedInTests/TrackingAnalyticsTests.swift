@@ -251,6 +251,45 @@ final class TrackingAnalyticsTests: XCTestCase {
         XCTAssertEqual(metrics.totalReps, 12)
     }
 
+    func testExerciseBestSetCombinesWeightAndRepetitions() {
+        let bestSet = TrackingAnalytics.exerciseBestSet([
+            .init(weightKg: 60, reps: 8),
+            .init(weightKg: 65, reps: 5),
+            .init(weightKg: 62, reps: 7)
+        ])
+
+        XCTAssertEqual(bestSet?.weightKg, 62)
+        XCTAssertEqual(bestSet?.reps, 7)
+        XCTAssertEqual(bestSet?.estimatedStrengthKg ?? 0, 76.466, accuracy: 0.001)
+    }
+
+    func testExerciseBestSetIgnoresIncompleteAndInvalidSets() {
+        let bestSet = TrackingAnalytics.exerciseBestSet([
+            .init(weightKg: 0, reps: 12),
+            .init(weightKg: 60, reps: 0),
+            .init(weightKg: 50, reps: 10)
+        ])
+
+        XCTAssertEqual(bestSet?.weightKg, 50)
+        XCTAssertEqual(bestSet?.reps, 10)
+        XCTAssertEqual(bestSet?.estimatedStrengthKg ?? 0, 66.666, accuracy: 0.001)
+    }
+
+    func testExerciseBestSetReturnsNilWithoutWeightedCompletedSet() {
+        XCTAssertNil(TrackingAnalytics.exerciseBestSet([
+            .init(weightKg: 0, reps: 12),
+            .init(weightKg: 60, reps: 0)
+        ]))
+    }
+
+    func testVolumeChangeComparesLatestTrainingWithPreviousTraining() {
+        XCTAssertEqual(
+            TrackingAnalytics.percentageChange(from: 5_000, to: 5_500)!,
+            10,
+            accuracy: 0.001
+        )
+    }
+
     func testPercentageChangeUsesRawMetricDirection() {
         XCTAssertEqual(
             TrackingAnalytics.percentageChange(from: 50, to: 60)!,
