@@ -241,11 +241,10 @@ struct ExerciseStatsView: View {
     @State private var selectedExerciseID: String?
 
     private struct ExerciseProgressPoint: Identifiable {
+        let id: UUID
         let date: Date
         let maximumWeightKg: Double?
         let totalReps: Int
-
-        var id: Date { date }
     }
 
     private var slot: PlanSlotDefinition {
@@ -258,6 +257,13 @@ struct ExerciseStatsView: View {
 
     private var exercise: ExerciseDefinition? {
         ExerciseCatalog.exercise(id: exerciseID)
+    }
+
+    private var exerciseChartColors: [String: Color] {
+        if exercise?.repsOnly == true {
+            return ["Reps": .orange]
+        }
+        return ["Gewicht": Color.lockedGreen, "Reps": .orange]
     }
 
     private var points: [ExerciseProgressPoint] {
@@ -285,6 +291,7 @@ struct ExerciseStatsView: View {
                 )
                 guard metrics.totalReps > 0 else { return nil }
                 return ExerciseProgressPoint(
+                    id: workout.id,
                     date: workout.startedAt,
                     maximumWeightKg: metrics.maximumWeightKg,
                     totalReps: metrics.totalReps
@@ -432,10 +439,7 @@ struct ExerciseStatsView: View {
                                     .foregroundStyle(by: .value("Metrik", "Reps"))
                                 }
                             }
-                            .chartForegroundStyleScale([
-                                "Gewicht": Color.lockedGreen,
-                                "Reps": Color.orange
-                            ])
+                            .chartForegroundStyleScale(exerciseChartColors)
                             .chartLegend(position: .bottom, alignment: .leading, spacing: 12)
                             .chartYAxis {
                                 AxisMarks { value in
