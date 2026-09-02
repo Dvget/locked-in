@@ -717,12 +717,24 @@ struct ManualRunEntryView: View {
                 }
 
                 Section("Laufdaten") {
-                    TextField("Distanz in km", value: $distanceKm, format: .number.precision(.fractionLength(0...2)))
-                        .keyboardType(.decimalPad)
+                    LabeledContent("Distanz") {
+                        HStack(spacing: 6) {
+                            TextField("0,00", value: $distanceKm, format: .number.precision(.fractionLength(0...2)))
+                                .keyboardType(.decimalPad)
+                                .multilineTextAlignment(.trailing)
+                            Text("km").foregroundStyle(.secondary)
+                        }
+                    }
 
-                    TextField("Pace, z. B. 5:42", text: $paceText)
-                        .keyboardType(.numbersAndPunctuation)
-                        .monospacedDigit()
+                    LabeledContent("Pace") {
+                        HStack(spacing: 6) {
+                            TextField("5:42", text: $paceText)
+                                .keyboardType(.numbersAndPunctuation)
+                                .multilineTextAlignment(.trailing)
+                                .monospacedDigit()
+                            Text("min/km").foregroundStyle(.secondary)
+                        }
+                    }
 
                     if paceTotalSeconds == nil {
                         Text("Pace bitte als Minuten:Sekunden eingeben, z. B. 5:42.")
@@ -785,12 +797,24 @@ private struct RunEditSheet: View {
                     LabeledContent("Datum", value: date.formatted(date: .abbreviated, time: .omitted))
                 }
 
-                TextField("Distanz in km", value: $distanceKm, format: .number.precision(.fractionLength(0...2)))
-                    .keyboardType(.decimalPad)
+                LabeledContent("Distanz") {
+                    HStack(spacing: 6) {
+                        TextField("0,00", value: $distanceKm, format: .number.precision(.fractionLength(0...2)))
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                        Text("km").foregroundStyle(.secondary)
+                    }
+                }
 
-                TextField("Pace, z. B. 5:42", text: $paceText)
-                    .keyboardType(.numbersAndPunctuation)
-                    .monospacedDigit()
+                LabeledContent("Pace") {
+                    HStack(spacing: 6) {
+                        TextField("5:42", text: $paceText)
+                            .keyboardType(.numbersAndPunctuation)
+                            .multilineTextAlignment(.trailing)
+                            .monospacedDigit()
+                        Text("min/km").foregroundStyle(.secondary)
+                    }
+                }
             }
             .navigationTitle("Lauf bearbeiten")
             .toolbar {
