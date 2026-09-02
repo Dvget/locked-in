@@ -334,127 +334,8 @@ struct ExerciseStatsView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 14) {
-                LockedCard {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("ÜBUNG")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-
-                        HStack {
-                            Picker("Hauptübung", selection: $selectedSlotID) {
-                                ForEach(ExerciseCatalog.slots) { item in
-                                    Text(item.title).tag(item.id)
-                                }
-                            }
-                            .pickerStyle(.menu)
-                            .tint(.white)
-                            Spacer()
-                        }
-                        .frame(maxWidth: .infinity)
-                        .onChange(of: selectedSlotID) {
-                            selectedExerciseID = nil
-                        }
-
-                        Divider().overlay(Color.lockedBorder)
-
-                        HStack {
-                            Picker("Variante", selection: Binding(
-                                get: { exerciseID },
-                                set: {
-                                    selectedExerciseID = $0
-                                }
-                            )) {
-                                ForEach(slot.exercises) { exercise in
-                                    Text(exercise.shortName).tag(exercise.id)
-                                }
-                            }
-                            .pickerStyle(.menu)
-                            .tint(.white)
-                            Spacer()
-                        }
-                        .frame(maxWidth: .infinity)
-                    }
-                }
-
-                LockedCard {
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack(alignment: .top, spacing: 16) {
-                            if exercise?.repsOnly != true {
-                                exerciseMetric(
-                                    title: "GEWICHT",
-                                    value: points.last?.maximumWeightKg.map { "\($0.cleanWeight) kg" } ?? "—",
-                                    development: weightDevelopment,
-                                    color: Color.lockedGreen
-                                )
-
-                                Divider().overlay(Color.lockedBorder)
-                            }
-
-                            exerciseMetric(
-                                title: "REPS",
-                                value: points.last.map { "\($0.totalReps)" } ?? "—",
-                                development: repsDevelopment,
-                                color: .orange
-                            )
-                        }
-
-                        if points.count < 2 {
-                            ContentUnavailableView(
-                                "Noch kein Vergleich möglich",
-                                systemImage: "chart.xyaxis.line",
-                                description: Text("Für diese Übung werden mindestens zwei Trainings benötigt.")
-                            )
-                            .frame(height: 220)
-                        } else {
-                            Chart {
-                                ForEach(points) { point in
-                                    if let weight = point.maximumWeightKg, exercise?.repsOnly != true {
-                                        LineMark(
-                                            x: .value("Datum", point.date),
-                                            y: .value("Wert", weight),
-                                            series: .value("Metrik", "Gewicht")
-                                        )
-                                        .foregroundStyle(by: .value("Metrik", "Gewicht"))
-                                        .lineStyle(StrokeStyle(lineWidth: 3))
-
-                                        PointMark(
-                                            x: .value("Datum", point.date),
-                                            y: .value("Wert", weight)
-                                        )
-                                        .foregroundStyle(by: .value("Metrik", "Gewicht"))
-                                    }
-
-                                    LineMark(
-                                        x: .value("Datum", point.date),
-                                        y: .value("Wert", point.totalReps),
-                                        series: .value("Metrik", "Reps")
-                                    )
-                                    .foregroundStyle(by: .value("Metrik", "Reps"))
-                                    .lineStyle(StrokeStyle(lineWidth: 3))
-
-                                    PointMark(
-                                        x: .value("Datum", point.date),
-                                        y: .value("Wert", point.totalReps)
-                                    )
-                                    .foregroundStyle(by: .value("Metrik", "Reps"))
-                                }
-                            }
-                            .chartForegroundStyleScale(exerciseChartColors)
-                            .chartLegend(position: .bottom, alignment: .leading, spacing: 12)
-                            .chartYAxis {
-                                AxisMarks { value in
-                                    AxisGridLine()
-                                    AxisValueLabel {
-                                        if let number = value.as(Double.self) {
-                                            Text(String(format: "%.0f", number))
-                                        }
-                                    }
-                                }
-                            }
-                            .frame(height: 250)
-                        }
-                    }
-                }
+                exerciseSelectionCard
+                exerciseProgressCard
             }
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 16)
@@ -463,6 +344,152 @@ struct ExerciseStatsView: View {
         .background(Color.black)
         .navigationTitle("Einzelne Übungen")
         .lockedSwipeBack()
+    }
+
+    private var exerciseSelectionCard: some View {
+        LockedCard {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("ÜBUNG")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+
+                HStack {
+                    Picker("Hauptübung", selection: $selectedSlotID) {
+                        ForEach(ExerciseCatalog.slots) { item in
+                            Text(item.title).tag(item.id)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .tint(.white)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity)
+                .onChange(of: selectedSlotID) {
+                    selectedExerciseID = nil
+                }
+
+                Divider().overlay(Color.lockedBorder)
+
+                HStack {
+                    Picker("Variante", selection: Binding(
+                        get: { exerciseID },
+                        set: { selectedExerciseID = $0 }
+                    )) {
+                        ForEach(slot.exercises) { exercise in
+                            Text(exercise.shortName).tag(exercise.id)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .tint(.white)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+    }
+
+    private var exerciseProgressCard: some View {
+        LockedCard {
+            VStack(alignment: .leading, spacing: 12) {
+                exerciseMetricHeader
+                exerciseChartContent
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var exerciseMetricHeader: some View {
+        HStack(alignment: .top, spacing: 16) {
+            if exercise?.repsOnly != true {
+                exerciseMetric(
+                    title: "GEWICHT",
+                    value: points.last?.maximumWeightKg.map { "\($0.cleanWeight) kg" } ?? "—",
+                    development: weightDevelopment,
+                    color: Color.lockedGreen
+                )
+
+                Divider().overlay(Color.lockedBorder)
+            }
+
+            exerciseMetric(
+                title: "REPS",
+                value: points.last.map { "\($0.totalReps)" } ?? "—",
+                development: repsDevelopment,
+                color: .orange
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var exerciseChartContent: some View {
+        if points.count < 2 {
+            ContentUnavailableView(
+                "Noch kein Vergleich möglich",
+                systemImage: "chart.xyaxis.line",
+                description: Text("Für diese Übung werden mindestens zwei Trainings benötigt.")
+            )
+            .frame(height: 220)
+        } else {
+            exerciseChart
+        }
+    }
+
+    private var exerciseChart: some View {
+        Chart {
+            ForEach(points) { point in
+                if let weight = point.maximumWeightKg, exercise?.repsOnly != true {
+                    weightMarks(point: point, weight: weight)
+                }
+                repsMarks(point: point)
+            }
+        }
+        .chartForegroundStyleScale(exerciseChartColors)
+        .chartLegend(position: .bottom, alignment: .leading, spacing: 12)
+        .chartYAxis {
+            AxisMarks { value in
+                AxisGridLine()
+                AxisValueLabel {
+                    if let number = value.as(Double.self) {
+                        Text(String(format: "%.0f", number))
+                    }
+                }
+            }
+        }
+        .frame(height: 250)
+    }
+
+    @ChartContentBuilder
+    private func weightMarks(point: ExerciseProgressPoint, weight: Double) -> some ChartContent {
+        LineMark(
+            x: .value("Datum", point.date),
+            y: .value("Wert", weight),
+            series: .value("Metrik", "Gewicht")
+        )
+        .foregroundStyle(by: .value("Metrik", "Gewicht"))
+        .lineStyle(StrokeStyle(lineWidth: 3))
+
+        PointMark(
+            x: .value("Datum", point.date),
+            y: .value("Wert", weight)
+        )
+        .foregroundStyle(by: .value("Metrik", "Gewicht"))
+    }
+
+    @ChartContentBuilder
+    private func repsMarks(point: ExerciseProgressPoint) -> some ChartContent {
+        LineMark(
+            x: .value("Datum", point.date),
+            y: .value("Wert", point.totalReps),
+            series: .value("Metrik", "Reps")
+        )
+        .foregroundStyle(by: .value("Metrik", "Reps"))
+        .lineStyle(StrokeStyle(lineWidth: 3))
+
+        PointMark(
+            x: .value("Datum", point.date),
+            y: .value("Wert", point.totalReps)
+        )
+        .foregroundStyle(by: .value("Metrik", "Reps"))
     }
 
     private func exerciseMetric(
