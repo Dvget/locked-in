@@ -66,6 +66,13 @@ struct StrengthStatsDetailView: View {
         return StrengthProgressMetric.workoutProgress(workout: last, workouts: workouts, sets: sets)
     }
 
+    private var latestVolumeChange: Double? {
+        guard volumePoints.count >= 2 else { return nil }
+        let previous = volumePoints[volumePoints.count - 2].value
+        let latest = volumePoints[volumePoints.count - 1].value
+        return TrackingAnalytics.percentageChange(from: previous, to: latest)
+    }
+
     private var volumePoints: [ProgressPoint] {
         completedWorkouts.map { workout in
             let samples = sets
@@ -176,7 +183,11 @@ struct StrengthStatsDetailView: View {
 
             LockedCard {
                 HStack {
-                    metric("LETZTES TRAINING", StrengthProgressMetric.text(latestWorkoutChange), StrengthProgressStyle.color(for: latestWorkoutChange))
+                    if selectedSeries == .performance {
+                        metric("LEISTUNGSTREND", StrengthProgressMetric.text(latestWorkoutChange), StrengthProgressStyle.color(for: latestWorkoutChange))
+                    } else {
+                        metric("VOLUMENTREND", StrengthProgressMetric.text(latestVolumeChange), StrengthProgressStyle.color(for: latestVolumeChange))
+                    }
                     Spacer()
                     metric("TRAININGS", completedWorkouts.count.formatted())
                     Spacer()
@@ -243,8 +254,11 @@ struct ExerciseStatsView: View {
     private struct ExerciseProgressPoint: Identifiable {
         let id: UUID
         let date: Date
-        let maximumWeightKg: Double?
+        let bestSetWeightKg: Double?
+        let bestSetReps: Int?
         let totalReps: Int
+        let performanceValue: Double
+        let setSummary: String
     }
 
     private var slot: PlanSlotDefinition {
@@ -283,31 +297,41 @@ struct ExerciseStatsView: View {
                     repsOnly: exercise?.repsOnly ?? false
                 )
                 guard metrics.totalReps > 0 else { return nil }
+                if exercise?.repsOnly == true {
+                    return ExerciseProgressPoint(
+                        id: workout.id,
+                        date: workout.startedAt,
+                        bestSetWeightKg: nil,
+                        bestSetReps: nil,
+                        totalReps: metrics.totalReps,
+                        performanceValue: Double(metrics.totalReps),
+                        setSummary: workoutSets.map { "\($0.reps)" }.joined(separator: " · ")
+                    )
+                }
+
+                guard let bestSet = TrackingAnalytics.exerciseBestSet(workoutSets) else { return nil }
                 return ExerciseProgressPoint(
                     id: workout.id,
                     date: workout.startedAt,
-                    maximumWeightKg: metrics.maximumWeightKg,
-                    totalReps: metrics.totalReps
+                    bestSetWeightKg: bestSet.weightKg,
+                    bestSetReps: bestSet.reps,
+                    totalReps: metrics.totalReps,
+                    performanceValue: bestSet.estimatedStrengthKg,
+                    setSummary: workoutSets
+                        .filter { $0.weightKg > 0 }
+                        .map { "\($0.weightKg.cleanWeight)×\($0.reps)" }
+                        .joined(separator: " · ")
                 )
             }
     }
 
-    private var weightDevelopment: Double? {
-        guard let first = points.compactMap(\.maximumWeightKg).first,
-              let last = points.compactMap(\.maximumWeightKg).last,
-              points.compactMap(\.maximumWeightKg).count > 1 else {
-            return nil
-        }
-        return TrackingAnalytics.percentageChange(from: first, to: last)
-    }
-
-    private var repsDevelopment: Double? {
-        guard let first = points.first?.totalReps,
-              let last = points.last?.totalReps,
+    private var performanceDevelopment: Double? {
+        guard let first = points.first?.performanceValue,
+              let last = points.last?.performanceValue,
               points.count > 1 else {
             return nil
         }
-        return TrackingAnalytics.percentageChange(from: Double(first), to: Double(last))
+        return TrackingAnalytics.percentageChange(from: first, to: last)
     }
 
     private func developmentText(_ development: Double?) -> String {
@@ -386,31 +410,21 @@ struct ExerciseStatsView: View {
             VStack(alignment: .leading, spacing: 12) {
                 exerciseMetricHeader
                 exerciseChartContent
+                if !points.isEmpty {
+                    Divider().overlay(Color.lockedBorder)
+                    exerciseHistory
+                }
             }
         }
     }
 
     @ViewBuilder
     private var exerciseMetricHeader: some View {
-        HStack(alignment: .top, spacing: 16) {
-            if exercise?.repsOnly != true {
-                exerciseMetric(
-                    title: "GEWICHT",
-                    value: points.last?.maximumWeightKg.map { "\($0.cleanWeight) kg" } ?? "—",
-                    development: weightDevelopment,
-                    color: Color.lockedGreen
-                )
-
-                Divider().overlay(Color.lockedBorder)
-            }
-
-            exerciseMetric(
-                title: "REPS",
-                value: points.last.map { "\($0.totalReps)" } ?? "—",
-                development: repsDevelopment,
-                color: .orange
-            )
-        }
+        exerciseMetric(
+            title: "LEISTUNGSENTWICKLUNG",
+            value: currentPerformanceText,
+            development: performanceDevelopment
+        )
     }
 
     @ViewBuilder
@@ -429,95 +443,94 @@ struct ExerciseStatsView: View {
 
     private var exerciseChart: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Chart {
-                ForEach(points) { point in
-                    if let weight = point.maximumWeightKg, exercise?.repsOnly != true {
-                        weightMarks(point: point, weight: weight)
-                    }
-                    repsMarks(point: point)
-                }
+            Chart(points) { point in
+                LineMark(
+                    x: .value("Datum", point.date),
+                    y: .value("Leistung", point.performanceValue)
+                )
+                .foregroundStyle(Color.lockedGreen)
+                .lineStyle(StrokeStyle(lineWidth: 3))
+
+                PointMark(
+                    x: .value("Datum", point.date),
+                    y: .value("Leistung", point.performanceValue)
+                )
+                .foregroundStyle(Color.lockedGreen)
             }
-            .chartLegend(.hidden)
+            .chartYScale(domain: .automatic(includesZero: false))
             .chartYAxis {
                 AxisMarks { value in
                     AxisGridLine()
                     AxisValueLabel {
                         if let number = value.as(Double.self) {
-                            Text(String(format: "%.0f", number))
+                            if exercise?.repsOnly == true {
+                                Text("\(Int(number.rounded()))")
+                            } else {
+                                Text("\(Int(number.rounded())) kg")
+                            }
                         }
                     }
                 }
             }
             .frame(height: 225)
 
-            exerciseChartLegend
+            Text(exercise?.repsOnly == true
+                 ? "Die Kurve zeigt die Gesamtwiederholungen pro Training."
+                 : "Die Kurve verbindet Gewicht und Wiederholungen anhand des stärksten Satzes.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 
-    private var exerciseChartLegend: some View {
-        HStack(spacing: 16) {
-            if exercise?.repsOnly != true {
-                chartLegendItem(title: "Gewicht", color: Color.lockedGreen)
+    private var exerciseHistory: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("TRAININGSWERTE")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+
+            ForEach(points.reversed()) { point in
+                HStack(alignment: .firstTextBaseline) {
+                    Text(point.date.formatted(.dateTime.day().month(.abbreviated).year()))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(performanceText(for: point))
+                            .font(.subheadline.weight(.semibold).monospacedDigit())
+                        Text(exercise?.repsOnly == true ? point.setSummary : "Sätze: \(point.setSummary)")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                if point.id != points.first?.id {
+                    Divider().overlay(Color.lockedBorder)
+                }
             }
-            chartLegendItem(title: "Reps", color: .orange)
         }
-        .font(.caption.weight(.semibold))
-        .foregroundStyle(.secondary)
     }
 
-    @ChartContentBuilder
-    private func weightMarks(point: ExerciseProgressPoint, weight: Double) -> some ChartContent {
-        LineMark(
-            x: .value("Datum", point.date),
-            y: .value("Wert", weight),
-            series: .value("Metrik", "Gewicht")
-        )
-        .foregroundStyle(Color.lockedGreen)
-        .lineStyle(StrokeStyle(lineWidth: 3))
-
-        PointMark(
-            x: .value("Datum", point.date),
-            y: .value("Wert", weight)
-        )
-        .foregroundStyle(Color.lockedGreen)
+    private var currentPerformanceText: String {
+        guard let point = points.last else { return "—" }
+        return performanceText(for: point)
     }
 
-    @ChartContentBuilder
-    private func repsMarks(point: ExerciseProgressPoint) -> some ChartContent {
-        LineMark(
-            x: .value("Datum", point.date),
-            y: .value("Wert", point.totalReps),
-            series: .value("Metrik", "Reps")
-        )
-        .foregroundStyle(Color.orange)
-        .lineStyle(StrokeStyle(lineWidth: 3))
-
-        PointMark(
-            x: .value("Datum", point.date),
-            y: .value("Wert", point.totalReps)
-        )
-        .foregroundStyle(Color.orange)
-    }
-
-    private func chartLegendItem(title: String, color: Color) -> some View {
-        HStack(spacing: 6) {
-            Capsule()
-                .fill(color)
-                .frame(width: 18, height: 4)
-            Text(title)
+    private func performanceText(for point: ExerciseProgressPoint) -> String {
+        if exercise?.repsOnly == true {
+            return "\(point.totalReps) Reps"
         }
+        guard let weight = point.bestSetWeightKg, let reps = point.bestSetReps else { return "—" }
+        return "\(weight.cleanWeight) kg × \(reps)"
     }
 
     private func exerciseMetric(
         title: String,
         value: String,
-        development: Double?,
-        color: Color
+        development: Double?
     ) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title)
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(color)
+                .foregroundStyle(Color.lockedGreen)
             Text(value)
                 .font(.system(size: 28, weight: .bold, design: .rounded))
                 .monospacedDigit()
