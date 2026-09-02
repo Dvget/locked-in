@@ -145,6 +145,39 @@ final class TrackingAnalyticsTests: XCTestCase {
         )
     }
 
+    func testCompletedDayStepAverageAlwaysExcludesToday() {
+        let samples = [
+            TrackingAnalytics.StepSample(date: date("2026-08-31"), steps: 10_000, source: "coremotion"),
+            TrackingAnalytics.StepSample(date: date("2026-09-01"), steps: 4_000, source: "coremotion"),
+            TrackingAnalytics.StepSample(date: date("2026-09-02"), steps: 0, source: "coremotion")
+        ]
+
+        XCTAssertEqual(
+            TrackingAnalytics.completedDayStepAverage(
+                samples,
+                now: date("2026-09-02"),
+                calendar: calendar
+            ),
+            7_000
+        )
+    }
+
+    func testCompletedDayStepAverageExcludesPartialTodayValueToo() {
+        let samples = [
+            TrackingAnalytics.StepSample(date: date("2026-09-01"), steps: 8_000, source: "coremotion"),
+            TrackingAnalytics.StepSample(date: date("2026-09-02"), steps: 3_000, source: "coremotion")
+        ]
+
+        XCTAssertEqual(
+            TrackingAnalytics.completedDayStepAverage(
+                samples,
+                now: date("2026-09-02"),
+                calendar: calendar
+            ),
+            8_000
+        )
+    }
+
     func testStepProgressStatusUsesElapsedWeeklyTarget() {
         XCTAssertEqual(
             TrackingAnalytics.stepProgressStatus(steps: 10_000, elapsedDays: 2),

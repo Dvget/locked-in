@@ -207,6 +207,18 @@ enum TrackingAnalytics {
         return preferred.reduce(0) { $0 + $1.steps } / preferred.count
     }
 
+    static func completedDayStepAverage(
+        _ samples: [StepSample],
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> Int? {
+        let today = calendar.startOfDay(for: now)
+        return recordedStepAverage(
+            samples.filter { calendar.startOfDay(for: $0.date) < today },
+            calendar: calendar
+        )
+    }
+
     static func stepBuckets(
         _ samples: [StepSample],
         range: Range,

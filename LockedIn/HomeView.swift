@@ -90,11 +90,11 @@ struct HomeView: View {
         return preferredSteps.filter { interval.contains($0.date) }
     }
 
-    private var averageStepsThisWeek: Int {
-        TrackingAnalytics.recordedStepAverage(
+    private var averageStepsThisWeek: Int? {
+        TrackingAnalytics.completedDayStepAverage(
             stepsThisWeek,
             calendar: trackingCalendar
-        ) ?? 0
+        )
     }
 
     private var strengthProgressColor: Color {
@@ -105,6 +105,7 @@ struct HomeView: View {
     }
 
     private var stepStatusColor: Color {
+        guard let averageStepsThisWeek else { return .secondary }
         switch averageStepsThisWeek {
         case ...4_000: return .red
         case 4_001..<7_500: return .yellow
@@ -169,11 +170,11 @@ struct HomeView: View {
                 } label: {
                     TrackingCategoryCard(
                         category: .steps,
-                        primary: stepsThisWeek.isEmpty ? "Noch keine Daten" : "Ø \(averageStepsThisWeek.formatted()) Schritte",
-                        secondary: stepsThisWeek.isEmpty ? "Steps synchronisieren" : "Durchschnitt diese Woche",
+                        primary: averageStepsThisWeek.map { "Ø \($0.formatted()) Schritte" } ?? "Noch keine Daten",
+                        secondary: averageStepsThisWeek == nil ? "Noch kein abgeschlossener Tag" : "Durchschnitt bis gestern",
                         minContentHeight: 100,
                         dashboardEmphasis: true,
-                        primaryColor: stepsThisWeek.isEmpty ? nil : stepStatusColor,
+                        primaryColor: averageStepsThisWeek == nil ? nil : stepStatusColor,
                         iconAccent: false
                     )
                 }
