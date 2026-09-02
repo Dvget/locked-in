@@ -178,8 +178,8 @@ struct HomeView: View {
                 } label: {
                     TrackingCategoryCard(
                         category: .steps,
-                        primary: stepsThisWeek.isEmpty ? "Noch keine Daten" : "Ø \(averageStepsThisWeek.formatted()) / 10.000",
-                        secondary: stepsThisWeek.isEmpty ? "Steps synchronisieren" : "\(totalStepsThisWeek.formatted()) Schritte diese Woche",
+                        primary: stepsThisWeek.isEmpty ? "Noch keine Daten" : "Ø \(averageStepsThisWeek.formatted()) Schritte",
+                        secondary: stepsThisWeek.isEmpty ? "Steps synchronisieren" : "Durchschnitt diese Woche",
                         minContentHeight: 100,
                         dashboardEmphasis: true,
                         primaryColor: stepsThisWeek.isEmpty ? nil : stepStatusColor,

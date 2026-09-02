@@ -53,6 +53,58 @@ final class TrackingAnalyticsTests: XCTestCase {
         XCTAssertEqual(change!, 10, accuracy: 0.2)
     }
 
+    func testRunSeriesChangesUseRawDistanceAndFasterPaceAsPositive() {
+        let samples = [
+            TrackingAnalytics.RunSample(date: date("2026-08-01"), distanceKm: 5, durationSeconds: 1_800),
+            TrackingAnalytics.RunSample(date: date("2026-08-08"), distanceKm: 7.5, durationSeconds: 3_150)
+        ]
+
+        XCTAssertEqual(
+            TrackingAnalytics.runSeriesChange(samples, series: .distance)!,
+            50,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            TrackingAnalytics.runSeriesChange(samples, series: .pace)!,
+            -14.285,
+            accuracy: 0.01
+        )
+        XCTAssertEqual(
+            TrackingAnalytics.runSeriesChange(samples, series: .overall)!,
+            13.389,
+            accuracy: 0.01
+        )
+
+        let faster = [
+            TrackingAnalytics.RunSample(date: date("2026-08-01"), distanceKm: 5, durationSeconds: 1_800),
+            TrackingAnalytics.RunSample(date: date("2026-08-08"), distanceKm: 5, durationSeconds: 1_500)
+        ]
+        XCTAssertEqual(
+            TrackingAnalytics.runSeriesChange(faster, series: .pace)!,
+            20,
+            accuracy: 0.001
+        )
+    }
+
+    func testRunChangeComparesCombinedPerformanceToPreviousRun() {
+        let previous = TrackingAnalytics.RunSample(
+            date: date("2026-08-01"),
+            distanceKm: 5,
+            durationSeconds: 1_800
+        )
+        let current = TrackingAnalytics.RunSample(
+            date: date("2026-08-08"),
+            distanceKm: 6,
+            durationSeconds: 1_800
+        )
+
+        XCTAssertEqual(
+            TrackingAnalytics.runChange(current: current, previous: previous)!,
+            20,
+            accuracy: 0.001
+        )
+    }
+
     func testPreferredStepSamplesUseOneCoreMotionValuePerDay() {
         let day = date("2026-09-01")
         let samples = [
@@ -81,6 +133,41 @@ final class TrackingAnalyticsTests: XCTestCase {
             TrackingAnalytics.stepProgressStatus(steps: 20_000, elapsedDays: 2),
             .green
         )
+    }
+
+    func testStepChartMaximumStartsAtTenThousandAndRoundsUp() {
+        XCTAssertEqual(TrackingAnalytics.stepChartMaximum([]), 10_000)
+        XCTAssertEqual(TrackingAnalytics.stepChartMaximum([10_000]), 10_000)
+        XCTAssertEqual(TrackingAnalytics.stepChartMaximum([10_001]), 12_500)
+        XCTAssertEqual(TrackingAnalytics.stepChartMaximum([13_100]), 15_000)
+        XCTAssertEqual(TrackingAnalytics.stepChartMaximum([18_600]), 20_000)
+    }
+
+    func testDailyStepStatusUsesAgreedThresholds() {
+        XCTAssertEqual(TrackingAnalytics.dailyStepStatus(steps: 4_000), .red)
+        XCTAssertEqual(TrackingAnalytics.dailyStepStatus(steps: 4_001), .yellow)
+        XCTAssertEqual(TrackingAnalytics.dailyStepStatus(steps: 7_499), .yellow)
+        XCTAssertEqual(TrackingAnalytics.dailyStepStatus(steps: 7_500), .green)
+    }
+
+    func testCumulativeIndexMovesUpForProgressAndDownForRegression() {
+        let points = TrackingAnalytics.cumulativeIndex(changes: [10, -5])
+
+        XCTAssertEqual(points.count, 3)
+        XCTAssertEqual(points[0], 100, accuracy: 0.001)
+        XCTAssertEqual(points[1], 110, accuracy: 0.001)
+        XCTAssertEqual(points[2], 104.5, accuracy: 0.001)
+    }
+
+    func testTrainingVolumeSumsOnlyWeightedCompletedRepetitions() {
+        let volume = TrackingAnalytics.trainingVolume([
+            .init(weightKg: 60, reps: 8, repsOnly: false),
+            .init(weightKg: 20, reps: 10, repsOnly: false),
+            .init(weightKg: 0, reps: 50, repsOnly: true),
+            .init(weightKg: 100, reps: 0, repsOnly: false)
+        ])
+
+        XCTAssertEqual(volume, 680, accuracy: 0.001)
     }
 
     func testDefaultWeightRangeFollowsHistorySpan() {

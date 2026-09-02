@@ -494,8 +494,10 @@ struct RunHistoryView: View {
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
                     } else {
-                        Text("\(pace(run))")
+                        let progress = runProgress(for: run)
+                        Text(StrengthProgressMetric.text(progress))
                             .font(.title3.bold().monospacedDigit())
+                            .foregroundStyle(StrengthProgressStyle.color(for: progress))
                     }
                 }
                 .padding(.vertical, 8)
@@ -547,6 +549,26 @@ struct RunHistoryView: View {
             }
         }
         .lockedSwipeBack()
+    }
+
+    private func runProgress(for run: RunRecord) -> Double? {
+        let visible = runs
+            .filter { !$0.isHidden && $0.distanceKm > 0 && $0.durationSeconds > 0 }
+            .sorted { $0.date < $1.date }
+        guard let index = visible.firstIndex(where: { $0.id == run.id }), index > 0 else { return nil }
+        let previous = visible[index - 1]
+        return TrackingAnalytics.runChange(
+            current: runSample(run),
+            previous: runSample(previous)
+        )
+    }
+
+    private func runSample(_ run: RunRecord) -> TrackingAnalytics.RunSample {
+        TrackingAnalytics.RunSample(
+            date: run.date,
+            distanceKm: run.distanceKm,
+            durationSeconds: run.durationSeconds
+        )
     }
 
     private func formatDuration(_ seconds: Double) -> String {

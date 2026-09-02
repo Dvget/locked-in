@@ -1,6 +1,12 @@
 import Foundation
 
 enum TrackingAnalytics {
+    enum RunSeries {
+        case overall
+        case distance
+        case pace
+    }
+
     enum Range: String, CaseIterable, Identifiable {
         case week = "Woche"
         case month = "Monat"
@@ -45,6 +51,12 @@ enum TrackingAnalytics {
         let date: Date
         let steps: Int
         let source: String
+    }
+
+    struct StrengthSetSample {
+        let weightKg: Double
+        let reps: Int
+        let repsOnly: Bool
     }
 
     struct StepBucket: Identifiable {
@@ -128,6 +140,38 @@ enum TrackingAnalytics {
         return (sqrt(distanceIndex * paceIndex) - 1) * 100
     }
 
+    static func runSeriesChange(
+        _ samples: [RunSample],
+        series: RunSeries
+    ) -> Double? {
+        let valid = samples
+            .filter { $0.distanceKm > 0 && $0.durationSeconds > 0 }
+            .sorted { $0.date < $1.date }
+        guard let first = valid.first, let last = valid.last, valid.count > 1 else { return nil }
+
+        switch series {
+        case .overall:
+            return runChange(current: last, previous: first)
+        case .distance:
+            return ((last.distanceKm / first.distanceKm) - 1) * 100
+        case .pace:
+            return ((first.paceSecondsPerKm / last.paceSecondsPerKm) - 1) * 100
+        }
+    }
+
+    static func runChange(current: RunSample, previous: RunSample) -> Double? {
+        guard current.distanceKm > 0,
+              current.durationSeconds > 0,
+              previous.distanceKm > 0,
+              previous.durationSeconds > 0 else {
+            return nil
+        }
+
+        let distanceRatio = current.distanceKm / previous.distanceKm
+        let paceRatio = previous.paceSecondsPerKm / current.paceSecondsPerKm
+        return (sqrt(distanceRatio * paceRatio) - 1) * 100
+    }
+
     static func preferredStepSamples(
         _ samples: [StepSample],
         calendar: Calendar = .current
@@ -204,6 +248,38 @@ enum TrackingAnalytics {
         if ratio < 0.7 { return .red }
         if ratio < 1 { return .yellow }
         return .green
+    }
+
+    static func stepChartMaximum(_ steps: [Int]) -> Int {
+        let highest = max(0, steps.max() ?? 0)
+        guard highest > 10_000 else { return 10_000 }
+        return Int((Double(highest) / 2_500).rounded(.up)) * 2_500
+    }
+
+    static func dailyStepStatus(steps: Int) -> Status {
+        if steps <= 4_000 { return .red }
+        if steps < 7_500 { return .yellow }
+        return .green
+    }
+
+    static func cumulativeIndex(
+        changes: [Double],
+        baseline: Double = 100
+    ) -> [Double] {
+        var result = [baseline]
+        var current = baseline
+        for change in changes {
+            current *= max(0, 1 + change / 100)
+            result.append(current)
+        }
+        return result
+    }
+
+    static func trainingVolume(_ samples: [StrengthSetSample]) -> Double {
+        samples.reduce(0) { total, sample in
+            guard !sample.repsOnly, sample.weightKg > 0, sample.reps > 0 else { return total }
+            return total + sample.weightKg * Double(sample.reps)
+        }
     }
 
     static func defaultWeightRange(
