@@ -7,6 +7,7 @@ import AppIntents
 struct LockedInLiveActivityBundle: WidgetBundle {
     var body: some Widget {
         LockedInLiveActivity()
+        LockedInRunLiveActivity()
     }
 }
 
@@ -191,5 +192,162 @@ struct LockedInLiveActivity: Widget {
     private func format(seconds: Int) -> String {
         let value = max(0, seconds)
         return String(format: "%d:%02d", value / 60, value % 60)
+    }
+}
+
+struct LockedInRunLiveActivity: Widget {
+    private let green = Color(red: 0.55, green: 0.86, blue: 0.31)
+
+    var body: some WidgetConfiguration {
+        ActivityConfiguration(for: LockedInRunActivityAttributes.self) { context in
+            VStack(spacing: 14) {
+                HStack {
+                    HStack(spacing: 8) {
+                        Image("LogoMark")
+                            .resizable()
+                            .renderingMode(.original)
+                            .scaledToFit()
+                            .frame(width: 24, height: 24)
+                        Text("RUNNING")
+                            .font(.caption.weight(.bold))
+                            .tracking(1.4)
+                            .foregroundStyle(green)
+                    }
+                    Spacer()
+                    runTimer(context.state)
+                        .font(.title2.bold())
+                }
+
+                HStack(spacing: 10) {
+                    runMetric(
+                        title: "DISTANZ",
+                        value: String(format: "%.2f", context.state.distanceMeters / 1_000),
+                        unit: "km",
+                        accent: true
+                    )
+                    runMetric(
+                        title: "PACE",
+                        value: pace(context.state.paceSecondsPerKm),
+                        unit: "/km",
+                        accent: false
+                    )
+                }
+
+                Button(intent: ToggleRunPauseIntent()) {
+                    Label(
+                        context.state.isPaused ? "Lauf fortsetzen" : "Lauf pausieren",
+                        systemImage: context.state.isPaused ? "play.fill" : "pause.fill"
+                    )
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(context.state.isPaused ? .black : .white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 44)
+                    .background(context.state.isPaused ? green : Color.white.opacity(0.10))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 16)
+            .activityBackgroundTint(Color.black.opacity(0.30))
+            .activitySystemActionForegroundColor(.white)
+        } dynamicIsland: { context in
+            DynamicIsland {
+                DynamicIslandExpandedRegion(.leading) {
+                    Image("LogoMark")
+                        .resizable()
+                        .renderingMode(.original)
+                        .scaledToFit()
+                        .frame(width: 28, height: 28)
+                }
+                DynamicIslandExpandedRegion(.center) {
+                    VStack(spacing: 2) {
+                        runTimer(context.state)
+                            .font(.title3.bold())
+                        Text(pace(context.state.paceSecondsPerKm) + " /km")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                DynamicIslandExpandedRegion(.trailing) {
+                    Button(intent: ToggleRunPauseIntent()) {
+                        Image(systemName: context.state.isPaused ? "play.fill" : "pause.fill")
+                            .foregroundStyle(context.state.isPaused ? .black : .white)
+                            .frame(width: 34, height: 34)
+                            .background(context.state.isPaused ? green : Color.white.opacity(0.10))
+                            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                }
+                DynamicIslandExpandedRegion(.bottom) {
+                    Text(String(format: "%.2f km", context.state.distanceMeters / 1_000))
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(green)
+                        .padding(.top, 4)
+                }
+            } compactLeading: {
+                Image(systemName: "figure.run")
+                    .foregroundStyle(green)
+            } compactTrailing: {
+                Text(String(format: "%.2f", context.state.distanceMeters / 1_000))
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(green)
+            } minimal: {
+                Image(systemName: "figure.run")
+                    .foregroundStyle(green)
+            }
+            .keylineTint(green)
+        }
+    }
+
+    @ViewBuilder
+    private func runTimer(_ state: LockedInRunActivityAttributes.ContentState) -> some View {
+        if state.isPaused {
+            Text(duration(state.activeDurationSeconds))
+                .monospacedDigit()
+                .foregroundStyle(.yellow)
+        } else {
+            Text(timerInterval: state.timerAnchor...Date.distantFuture, countsDown: false)
+                .monospacedDigit()
+                .foregroundStyle(.white)
+        }
+    }
+
+    private func runMetric(title: String, value: String, unit: String, accent: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(.caption2.weight(.bold))
+                .tracking(1.1)
+                .foregroundStyle(.secondary)
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(value)
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(accent ? green : .white)
+                Text(unit)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(Color.white.opacity(0.06))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private func pace(_ seconds: Double?) -> String {
+        guard let seconds, seconds.isFinite, seconds > 0 else { return "–:––" }
+        let total = Int(seconds.rounded())
+        return String(format: "%d:%02d", total / 60, total % 60)
+    }
+
+    private func duration(_ seconds: Int) -> String {
+        let value = max(0, seconds)
+        let hours = value / 3_600
+        let minutes = (value % 3_600) / 60
+        let remainder = value % 60
+        return hours > 0
+            ? String(format: "%d:%02d:%02d", hours, minutes, remainder)
+            : String(format: "%02d:%02d", minutes, remainder)
     }
 }
