@@ -101,6 +101,23 @@ struct RunSessionCheckpoint: Codable, Equatable {
     let metrics: RunMetricsSnapshot
     let speechEnabled: Bool
     let savedAt: Date
+    let calculatorState: RunMetricsCalculatorState?
+
+    init(
+        runID: UUID,
+        clock: RunSessionClock,
+        metrics: RunMetricsSnapshot,
+        speechEnabled: Bool,
+        savedAt: Date,
+        calculatorState: RunMetricsCalculatorState? = nil
+    ) {
+        self.runID = runID
+        self.clock = clock
+        self.metrics = metrics
+        self.speechEnabled = speechEnabled
+        self.savedAt = savedAt
+        self.calculatorState = calculatorState
+    }
 
     func isRestorable(at date: Date = Date()) -> Bool {
         date.timeIntervalSince(savedAt) < 24 * 60 * 60

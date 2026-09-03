@@ -258,6 +258,8 @@ struct ActiveRunView: View {
             let record: RunRecord
             if let pendingRecord {
                 record = pendingRecord
+            } else if let existing = try existingRun(id: payload.runID) {
+                record = existing
             } else {
                 record = RunRecord(
                     id: payload.runID,
@@ -281,13 +283,20 @@ struct ActiveRunView: View {
             }
 
             try modelContext.save()
-            try? AutomaticBackup.backup(modelContext: modelContext)
             engine.markSaved()
+            try? AutomaticBackup.backup(modelContext: modelContext)
             saveError = nil
             onComplete()
         } catch {
             saveError = error.localizedDescription
         }
+    }
+
+    private func existingRun(id: UUID) throws -> RunRecord? {
+        let descriptor = FetchDescriptor<RunRecord>(
+            predicate: #Predicate<RunRecord> { $0.id == id }
+        )
+        return try modelContext.fetch(descriptor).first
     }
 
     private func formatPace(_ seconds: Double?) -> String {

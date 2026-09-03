@@ -11,6 +11,7 @@ enum RunLiveActivityManager {
     private static var activity: Activity<LockedInRunActivityAttributes>?
     private static var lastUpdateAt = Date.distantPast
     private static var lastHandledControlRevision = 0
+    private static var mutationTask: Task<Void, Never>?
 
     static func start(runID: UUID, startedAt: Date) {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
@@ -61,7 +62,11 @@ enum RunLiveActivityManager {
             activeDurationSeconds: Int(activeDurationSeconds.rounded(.down)),
             controlRevision: revision
         )
-        Task { await current.update(ActivityContent(state: state, staleDate: nil)) }
+        enqueueMutation {
+            guard current.content.state.controlRevision == revision,
+                  revision <= lastHandledControlRevision else { return }
+            await current.update(ActivityContent(state: state, staleDate: nil))
+        }
     }
 
     static func consumePauseRequest(runID: UUID) -> RunLiveActivityControlRequest? {
@@ -80,7 +85,7 @@ enum RunLiveActivityManager {
         guard let current = matchingActivity(runID: runID) else { return }
         activity = nil
         lastHandledControlRevision = 0
-        Task {
+        enqueueMutation {
             await current.end(nil, dismissalPolicy: .immediate)
         }
     }
@@ -113,5 +118,15 @@ enum RunLiveActivityManager {
             controlRevision: controlRevision,
             controlDate: nil
         )
+    }
+
+    private static func enqueueMutation(
+        _ operation: @escaping @MainActor () async -> Void
+    ) {
+        let previous = mutationTask
+        mutationTask = Task { @MainActor in
+            await previous?.value
+            await operation()
+        }
     }
 }

@@ -97,6 +97,29 @@ struct RunMetricsSnapshot: Codable, Equatable {
     )
 }
 
+struct RunPaceSegment: Codable, Equatable {
+    let endedAt: Date
+    let distanceMeters: Double
+    let durationSeconds: TimeInterval
+}
+
+struct RunMetricsCalculatorState: Codable, Equatable {
+    let route: [RunLocationDecision]
+    let splits: [RunSplit]
+    let previousAccepted: RunLocationSample?
+    let previousActive: RunLocationSample?
+    let wasPaused: Bool
+    let distanceMeters: Double
+    let activeDurationSeconds: TimeInterval
+    let elevationGainMeters: Double
+    let elevationLossMeters: Double
+    let lastElevationReference: Double?
+    let paceSegments: [RunPaceSegment]
+    let lastSplitDuration: TimeInterval
+    let lastSplitGain: Double
+    let lastSplitLoss: Double
+}
+
 struct RunLocationFilter {
     let configuration: RunTrackingConfiguration
 
@@ -165,12 +188,6 @@ struct RunLocationFilter {
 }
 
 struct RunMetricsCalculator {
-    private struct PaceSegment {
-        let endedAt: Date
-        let distanceMeters: Double
-        let durationSeconds: TimeInterval
-    }
-
     let configuration: RunTrackingConfiguration
     private let filter: RunLocationFilter
     private var route: [RunLocationDecision] = []
@@ -183,7 +200,7 @@ struct RunMetricsCalculator {
     private var elevationGainMeters = 0.0
     private var elevationLossMeters = 0.0
     private var lastElevationReference: Double?
-    private var paceSegments: [PaceSegment] = []
+    private var paceSegments: [RunPaceSegment] = []
     private var lastSplitDuration: TimeInterval = 0
     private var lastSplitGain = 0.0
     private var lastSplitLoss = 0.0
@@ -191,6 +208,28 @@ struct RunMetricsCalculator {
     init(configuration: RunTrackingConfiguration = .version1) {
         self.configuration = configuration
         self.filter = RunLocationFilter(configuration: configuration)
+    }
+
+    init(
+        configuration: RunTrackingConfiguration = .version1,
+        state: RunMetricsCalculatorState
+    ) {
+        self.configuration = configuration
+        self.filter = RunLocationFilter(configuration: configuration)
+        self.route = state.route
+        self.splits = state.splits
+        self.previousAccepted = state.previousAccepted
+        self.previousActive = state.previousActive
+        self.wasPaused = state.wasPaused
+        self.distanceMeters = state.distanceMeters
+        self.activeDurationSeconds = state.activeDurationSeconds
+        self.elevationGainMeters = state.elevationGainMeters
+        self.elevationLossMeters = state.elevationLossMeters
+        self.lastElevationReference = state.lastElevationReference
+        self.paceSegments = state.paceSegments
+        self.lastSplitDuration = state.lastSplitDuration
+        self.lastSplitGain = state.lastSplitGain
+        self.lastSplitLoss = state.lastSplitLoss
     }
 
     init(
@@ -213,6 +252,25 @@ struct RunMetricsCalculator {
 
     var currentSnapshot: RunMetricsSnapshot {
         snapshot()
+    }
+
+    var checkpointState: RunMetricsCalculatorState {
+        RunMetricsCalculatorState(
+            route: route,
+            splits: splits,
+            previousAccepted: previousAccepted,
+            previousActive: previousActive,
+            wasPaused: wasPaused,
+            distanceMeters: distanceMeters,
+            activeDurationSeconds: activeDurationSeconds,
+            elevationGainMeters: elevationGainMeters,
+            elevationLossMeters: elevationLossMeters,
+            lastElevationReference: lastElevationReference,
+            paceSegments: paceSegments,
+            lastSplitDuration: lastSplitDuration,
+            lastSplitGain: lastSplitGain,
+            lastSplitLoss: lastSplitLoss
+        )
     }
 
     mutating func beginPause() {
@@ -287,7 +345,7 @@ struct RunMetricsCalculator {
                 segmentDistance = RunLocationFilter.distanceMeters(from: previousActive, to: sample)
                 distanceMeters += segmentDistance
                 activeDurationSeconds += segmentDuration
-                paceSegments.append(PaceSegment(
+                paceSegments.append(RunPaceSegment(
                     endedAt: sample.timestamp,
                     distanceMeters: segmentDistance,
                     durationSeconds: segmentDuration

@@ -122,6 +122,32 @@ final class RunTrackingCoreTests: XCTestCase {
         XCTAssertEqual(result.activeDurationSeconds, 60, accuracy: 0.001)
     }
 
+    func testCalculatorStateRestoresPauseBoundaryWithoutPausedSamples() {
+        var calculator = RunMetricsCalculator(configuration: .version1)
+        _ = calculator.ingest(sample(timestamp: 0), receivedAt: date(0), isPaused: false)
+        calculator.beginPause()
+        calculator.endPause()
+
+        let restoredState = try! RunArchiveCodec.decode(
+            RunMetricsCalculatorState.self,
+            from: RunArchiveCodec.encode(calculator.checkpointState)
+        )
+        var restored = RunMetricsCalculator(configuration: .version1, state: restoredState)
+        _ = restored.ingest(
+            sample(latitude: 48.001798, timestamp: 90),
+            receivedAt: date(90),
+            isPaused: false
+        )
+        let result = restored.ingest(
+            sample(latitude: 48.002697, timestamp: 150),
+            receivedAt: date(150),
+            isPaused: false
+        )
+
+        XCTAssertEqual(result.distanceMeters, 100, accuracy: 1.5)
+        XCTAssertEqual(result.activeDurationSeconds, 60, accuracy: 0.001)
+    }
+
     func testRollingPaceUsesRecentWindowInsteadOfOnlyLastPair() {
         var calculator = RunMetricsCalculator(configuration: .version1)
         _ = calculator.ingest(sample(timestamp: 0), receivedAt: date(0), isPaused: false)

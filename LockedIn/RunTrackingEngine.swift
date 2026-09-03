@@ -62,9 +62,13 @@ final class RunTrackingEngine: NSObject, ObservableObject, Identifiable {
         self.runID = checkpoint?.runID ?? UUID()
         self.configuration = configuration
         self.clock = checkpoint?.clock ?? RunSessionClock()
-        self.calculator = checkpoint.map {
-            RunMetricsCalculator(configuration: configuration, replaying: $0.metrics.route)
-        } ?? RunMetricsCalculator(configuration: configuration)
+        if let state = checkpoint?.calculatorState {
+            self.calculator = RunMetricsCalculator(configuration: configuration, state: state)
+        } else if let checkpoint {
+            self.calculator = RunMetricsCalculator(configuration: configuration, replaying: checkpoint.metrics.route)
+        } else {
+            self.calculator = RunMetricsCalculator(configuration: configuration)
+        }
         self.metrics = checkpoint?.metrics ?? .empty
         self.phase = checkpoint?.clock.phase ?? .preparing
         self.authorizationStatus = CLLocationManager().authorizationStatus
@@ -287,7 +291,8 @@ final class RunTrackingEngine: NSObject, ObservableObject, Identifiable {
             clock: clock,
             metrics: metrics,
             speechEnabled: speechEnabled,
-            savedAt: now
+            savedAt: now,
+            calculatorState: calculator.checkpointState
         ))
     }
 
