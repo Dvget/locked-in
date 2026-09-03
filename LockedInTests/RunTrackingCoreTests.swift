@@ -188,4 +188,23 @@ final class RunTrackingCoreTests: XCTestCase {
         XCTAssertNil(archive.configuration)
         XCTAssertNil(archive.metadata)
     }
+
+    func testCalculatorReplayRestoresSavedRouteMetrics() {
+        var original = RunMetricsCalculator(configuration: .version1)
+        _ = original.ingest(sample(timestamp: 0), receivedAt: date(0), isPaused: false)
+        let saved = original.ingest(
+            sample(latitude: 48.000899, timestamp: 60),
+            receivedAt: date(60),
+            isPaused: false
+        )
+
+        let restored = RunMetricsCalculator(
+            configuration: .version1,
+            replaying: saved.route
+        )
+
+        XCTAssertEqual(restored.currentSnapshot.distanceMeters, saved.distanceMeters, accuracy: 0.001)
+        XCTAssertEqual(restored.currentSnapshot.activeDurationSeconds, saved.activeDurationSeconds, accuracy: 0.001)
+        XCTAssertEqual(restored.currentSnapshot.route, saved.route)
+    }
 }
