@@ -9,7 +9,7 @@ struct HomeView: View {
     @Query(sort: \StepRecord.date, order: .reverse) private var steps: [StepRecord]
     @Query(sort: \WeightRecord.date, order: .reverse) private var weights: [WeightRecord]
 
-    @State private var showPlan = false
+    @State private var showTrainingSelection = false
     @State private var resumedWorkout: ActiveWorkoutState?
 
     private var completed: [WorkoutRecord] {
@@ -217,7 +217,7 @@ struct HomeView: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
             .background(Color.black)
-            .sheet(isPresented: $showPlan) { WorkoutPlanView() }
+            .sheet(isPresented: $showTrainingSelection) { TrainingModeSelectionView() }
             .fullScreenCover(item: $resumedWorkout) { workoutState in
                 ActiveWorkoutView(state: workoutState) {
                     resumedWorkout = nil
@@ -289,7 +289,7 @@ struct HomeView: View {
     }
 
     private var startCard: some View {
-        Button { showPlan = true } label: {
+        Button { showTrainingSelection = true } label: {
             HStack(spacing: 12) {
                 Image(systemName: "play.fill")
                     .font(.title2)
@@ -300,9 +300,6 @@ struct HomeView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Training starten").font(.title2.bold())
-                    Text("Neues Krafttraining beginnen")
-                        .font(.subheadline)
-                        .foregroundStyle(Color.lockedGreen)
                 }
 
                 Spacer()

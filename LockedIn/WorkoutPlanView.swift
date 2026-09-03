@@ -11,6 +11,16 @@ struct WorkoutPlanView: View {
         uniqueKeysWithValues: ExerciseCatalog.slots.map { ($0.id, $0.defaultExerciseID) }
     )
     @State private var activeWorkout: ActiveWorkoutState?
+    private let onClose: (() -> Void)?
+    private let onFlowFinished: (() -> Void)?
+
+    init(
+        onClose: (() -> Void)? = nil,
+        onFlowFinished: (() -> Void)? = nil
+    ) {
+        self.onClose = onClose
+        self.onFlowFinished = onFlowFinished
+    }
 
     var body: some View {
         NavigationStack {
@@ -37,13 +47,15 @@ struct WorkoutPlanView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Schließen") { dismiss() }
+                    Button("Schließen") {
+                        if let onClose { onClose() } else { dismiss() }
+                    }
                 }
             }
             .fullScreenCover(item: $activeWorkout) { workoutState in
                 ActiveWorkoutView(state: workoutState) {
                     activeWorkout = nil
-                    dismiss()
+                    if let onFlowFinished { onFlowFinished() } else { dismiss() }
                 }
             }
         }

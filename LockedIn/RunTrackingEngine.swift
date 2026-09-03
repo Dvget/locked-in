@@ -14,8 +14,9 @@ struct RunFinishedPayload {
 }
 
 @MainActor
-final class RunTrackingEngine: NSObject, ObservableObject {
+final class RunTrackingEngine: NSObject, ObservableObject, Identifiable {
     let runID: UUID
+    var id: UUID { runID }
     let configuration: RunTrackingConfiguration
 
     @Published private(set) var phase: RunSessionPhase
