@@ -47,4 +47,20 @@ final class RunSessionLogicTests: XCTestCase {
         XCTAssertEqual(clock.phase, .finishing)
         XCTAssertEqual(clock.activeDuration(at: date(200)), 75, accuracy: 0.001)
     }
+
+    func testFinishingCheckpointIsRestorableForSaveRetry() {
+        var clock = RunSessionClock()
+        XCTAssertTrue(clock.start(at: date(0)))
+        XCTAssertTrue(clock.finish(at: date(75)))
+
+        let checkpoint = RunSessionCheckpoint(
+            runID: UUID(),
+            clock: clock,
+            metrics: .empty,
+            speechEnabled: true,
+            savedAt: date(80)
+        )
+
+        XCTAssertTrue(checkpoint.isRestorable(at: date(90)))
+    }
 }

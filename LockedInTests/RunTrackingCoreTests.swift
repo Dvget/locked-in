@@ -100,6 +100,28 @@ final class RunTrackingCoreTests: XCTestCase {
         XCTAssertEqual(result.activeDurationSeconds, 60, accuracy: 0.001)
     }
 
+    func testExplicitPauseWithoutLocationSamplesDoesNotBridgeResume() {
+        var calculator = RunMetricsCalculator(configuration: .version1)
+        _ = calculator.ingest(sample(timestamp: 0), receivedAt: date(0), isPaused: false)
+
+        calculator.beginPause()
+        calculator.endPause()
+
+        _ = calculator.ingest(
+            sample(latitude: 48.001798, timestamp: 90),
+            receivedAt: date(90),
+            isPaused: false
+        )
+        let result = calculator.ingest(
+            sample(latitude: 48.002697, timestamp: 150),
+            receivedAt: date(150),
+            isPaused: false
+        )
+
+        XCTAssertEqual(result.distanceMeters, 100, accuracy: 1.5)
+        XCTAssertEqual(result.activeDurationSeconds, 60, accuracy: 0.001)
+    }
+
     func testRollingPaceUsesRecentWindowInsteadOfOnlyLastPair() {
         var calculator = RunMetricsCalculator(configuration: .version1)
         _ = calculator.ingest(sample(timestamp: 0), receivedAt: date(0), isPaused: false)
@@ -179,6 +201,15 @@ final class RunTrackingCoreTests: XCTestCase {
         XCTAssertEqual(decoded, original)
     }
 
+    func testRunArchiveCodecPreservesSubsecondTimestamps() throws {
+        let original = sample(timestamp: 10.123_456)
+
+        let encoded = try RunArchiveCodec.encode(original)
+        let decoded = try RunArchiveCodec.decode(RunLocationSample.self, from: encoded)
+
+        XCTAssertEqual(decoded.timestamp.timeIntervalSince1970, 10.123_456, accuracy: 0.000_001)
+    }
+
     func testNativeRunArchiveDecodesLegacyEmptyObject() throws {
         let archive = try JSONDecoder().decode(NativeRunArchive.self, from: Data("{}".utf8))
 
@@ -206,5 +237,29 @@ final class RunTrackingCoreTests: XCTestCase {
         XCTAssertEqual(restored.currentSnapshot.distanceMeters, saved.distanceMeters, accuracy: 0.001)
         XCTAssertEqual(restored.currentSnapshot.activeDurationSeconds, saved.activeDurationSeconds, accuracy: 0.001)
         XCTAssertEqual(restored.currentSnapshot.route, saved.route)
+    }
+
+    func testCalculatorReplayPreservesRejectedDecisionWithoutReclassifyingIt() {
+        let accepted = RunLocationDecision(
+            sample: sample(timestamp: 0),
+            accepted: true,
+            cumulativeDistanceMeters: 0,
+            paused: false
+        )
+        let rejected = RunLocationDecision(
+            sample: sample(latitude: 48.0001, timestamp: 1),
+            accepted: false,
+            rejectionReason: .stale,
+            cumulativeDistanceMeters: 0,
+            paused: false
+        )
+
+        let restored = RunMetricsCalculator(
+            configuration: .version1,
+            replaying: [accepted, rejected]
+        )
+
+        XCTAssertEqual(restored.currentSnapshot.route, [accepted, rejected])
+        XCTAssertEqual(restored.currentSnapshot.distanceMeters, 0, accuracy: 0.001)
     }
 }
