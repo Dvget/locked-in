@@ -11,6 +11,7 @@ struct HomeView: View {
 
     @State private var showTrainingSelection = false
     @State private var resumedWorkout: ActiveWorkoutState?
+    @State private var resumedRun: RunTrackingEngine?
 
     private var completed: [WorkoutRecord] {
         workouts.filter { $0.isCompleted && !$0.isHidden }
@@ -193,7 +194,7 @@ struct HomeView: View {
                 } label: {
                     TrackingCategoryCard(
                         category: .steps,
-                        primary: averageStepsThisWeek.map { "Ø \($0.formatted()) Schritte" } ?? "Noch keine Daten",
+                        primary: averageStepsThisWeek.map { "Ø \($0.formatted())" } ?? "Noch keine Daten",
                         secondary: averageStepsThisWeek == nil ? "Noch kein abgeschlossener Tag" : "Wochenschnitt",
                         minContentHeight: 100,
                         dashboardEmphasis: true,
@@ -223,6 +224,16 @@ struct HomeView: View {
                     resumedWorkout = nil
                 }
             }
+            .fullScreenCover(item: $resumedRun) { engine in
+                ActiveRunView(engine: engine) {
+                    resumedRun = nil
+                }
+            }
+            .onAppear {
+                guard resumedRun == nil else { return }
+                resumedRun = RunTrackingEngine.restoreIfAvailable()
+                resumedRun?.prepare()
+            }
         }
     }
 
@@ -240,9 +251,6 @@ struct HomeView: View {
                     Text("Gewicht")
                         .font(.title3.bold())
                         .foregroundStyle(.white)
-                    Text("Gewichtsübersicht und Waage")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
                 }
 
                 Spacer()
