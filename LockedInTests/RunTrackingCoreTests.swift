@@ -162,4 +162,30 @@ final class RunTrackingCoreTests: XCTestCase {
         XCTAssertEqual(result.route.last?.rejectionReason, .implausibleSpeed)
         XCTAssertEqual(result.distanceMeters, 0, accuracy: 0.001)
     }
+
+    func testRunArchiveCodecRoundTripsRouteDecisions() throws {
+        let original = [
+            RunLocationDecision(
+                sample: sample(timestamp: 10),
+                accepted: true,
+                cumulativeDistanceMeters: 42,
+                paused: false
+            )
+        ]
+
+        let encoded = try RunArchiveCodec.encode(original)
+        let decoded = try RunArchiveCodec.decode([RunLocationDecision].self, from: encoded)
+
+        XCTAssertEqual(decoded, original)
+    }
+
+    func testNativeRunArchiveDecodesLegacyEmptyObject() throws {
+        let archive = try JSONDecoder().decode(NativeRunArchive.self, from: Data("{}".utf8))
+
+        XCTAssertNil(archive.algorithmVersion)
+        XCTAssertNil(archive.route)
+        XCTAssertNil(archive.splits)
+        XCTAssertNil(archive.configuration)
+        XCTAssertNil(archive.metadata)
+    }
 }
