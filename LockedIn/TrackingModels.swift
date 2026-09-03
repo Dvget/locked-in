@@ -14,6 +14,11 @@ final class RunRecord {
     var importedPaceSecondsPerKm: Double? = nil
     var sportId: Int? = nil
     var sourceName: String? = nil
+    var elevationGainMeters: Double? = nil
+    var elevationLossMeters: Double? = nil
+    var pausedDurationSeconds: Double? = nil
+    var algorithmVersion: String? = nil
+    var nativeArchiveData: Data? = nil
 
     init(
         id: UUID = UUID(),
@@ -26,7 +31,12 @@ final class RunRecord {
         startTime: Date? = nil,
         importedPaceSecondsPerKm: Double? = nil,
         sportId: Int? = nil,
-        sourceName: String? = nil
+        sourceName: String? = nil,
+        elevationGainMeters: Double? = nil,
+        elevationLossMeters: Double? = nil,
+        pausedDurationSeconds: Double? = nil,
+        algorithmVersion: String? = nil,
+        nativeArchiveData: Data? = nil
     ) {
         self.id = id
         self.date = date
@@ -39,11 +49,21 @@ final class RunRecord {
         self.importedPaceSecondsPerKm = importedPaceSecondsPerKm
         self.sportId = sportId
         self.sourceName = sourceName
+        self.elevationGainMeters = elevationGainMeters
+        self.elevationLossMeters = elevationLossMeters
+        self.pausedDurationSeconds = pausedDurationSeconds
+        self.algorithmVersion = algorithmVersion
+        self.nativeArchiveData = nativeArchiveData
     }
 
     var paceSecondsPerKm: Double {
         guard distanceKm > 0 else { return 0 }
         return durationSeconds / distanceKm
+    }
+
+    var nativeArchive: NativeRunArchive? {
+        guard let nativeArchiveData else { return nil }
+        return try? RunArchiveCodec.decode(NativeRunArchive.self, from: nativeArchiveData)
     }
 }
 
