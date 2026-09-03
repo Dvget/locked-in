@@ -7,8 +7,8 @@ settings:
   base:
     PRODUCT_BUNDLE_IDENTIFIER: app.lockedin.tracker
     SWIFT_VERSION: 5.0
-    CURRENT_PROJECT_VERSION: 27
-    MARKETING_VERSION: 0.7.0
+    CURRENT_PROJECT_VERSION: 28
+    MARKETING_VERSION: 0.7.1
 targets:
   LockedIn:
     type: application
@@ -18,20 +18,25 @@ targets:
       - Shared
     dependencies:
       - target: LockedInLiveActivity
+    info:
+      path: LockedIn/Info.plist
+      properties:
+        CFBundleDisplayName: "LOCKED IN"
+        NSBluetoothAlwaysUsageDescription: "LOCKED IN verbindet sich kurz mit deiner Etekcity-Waage, um dein Körpergewicht zu übernehmen."
+        NSMotionUsageDescription: "LOCKED IN liest die iPhone-Schrittzählung, um deine Steps und Wochenziele anzuzeigen."
+        NSLocationWhenInUseUsageDescription: "LOCKED IN verwendet deinen Standort, um Distanz, Pace und Höhenmeter während eines Laufs aufzuzeichnen."
+        NSLocationAlwaysAndWhenInUseUsageDescription: "LOCKED IN zeichnet deinen aktiven Lauf auch bei gesperrtem Bildschirm zuverlässig weiter auf."
+        NSSupportsLiveActivities: true
+        UIApplicationSupportsIndirectInputEvents: true
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true
+          UISceneConfigurations: {}
+        UILaunchScreen: {}
+        UIBackgroundModes:
+          - location
     settings:
       base:
         PRODUCT_NAME: "LOCKED IN"
-        GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: "LOCKED IN"
-        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
-        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
-        INFOPLIST_KEY_UILaunchScreen_Generation: YES
-        INFOPLIST_KEY_NSSupportsLiveActivities: YES
-        INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription: "LOCKED IN verbindet sich kurz mit deiner Etekcity-Waage, um dein Körpergewicht zu übernehmen."
-        INFOPLIST_KEY_NSMotionUsageDescription: "LOCKED IN liest die iPhone-Schrittzählung, um deine Steps und Wochenziele anzuzeigen."
-        INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: "LOCKED IN verwendet deinen Standort, um Distanz, Pace und Höhenmeter während eines Laufs aufzuzeichnen."
-        INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription: "LOCKED IN zeichnet deinen aktiven Lauf auch bei gesperrtem Bildschirm zuverlässig weiter auf."
-        INFOPLIST_KEY_UIBackgroundModes: location
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CODE_SIGN_STYLE: Automatic
         TARGETED_DEVICE_FAMILY: "1"
