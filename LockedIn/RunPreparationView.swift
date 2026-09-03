@@ -11,11 +11,11 @@ struct RunPreparationView: View {
     private let onFlowFinished: () -> Void
 
     init(
-        engine: RunTrackingEngine = RunTrackingEngine(),
+        engine: RunTrackingEngine? = nil,
         onClose: @escaping () -> Void,
         onFlowFinished: @escaping () -> Void
     ) {
-        _engine = StateObject(wrappedValue: engine)
+        _engine = StateObject(wrappedValue: engine ?? RunTrackingEngine())
         self.onClose = onClose
         self.onFlowFinished = onFlowFinished
     }
