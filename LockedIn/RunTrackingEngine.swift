@@ -98,6 +98,10 @@ final class RunTrackingEngine: NSObject, ObservableObject {
         } else if Self.isAuthorized(authorizationStatus) {
             locationManager.startUpdatingLocation()
         }
+        if [.recording, .paused].contains(phase), let startedAt = clock.startedAt {
+            RunLiveActivityManager.start(runID: runID, startedAt: startedAt)
+            updateLiveActivity(force: true)
+        }
         startTimerIfNeeded()
     }
 
@@ -113,6 +117,8 @@ final class RunTrackingEngine: NSObject, ObservableObject {
         activeDurationSeconds = 0
         locationManager.startUpdatingLocation()
         startTimerIfNeeded()
+        RunLiveActivityManager.start(runID: runID, startedAt: date)
+        updateLiveActivity(force: true)
         checkpoint(force: true)
         return true
     }
@@ -121,6 +127,7 @@ final class RunTrackingEngine: NSObject, ObservableObject {
         guard clock.pause(at: date) else { return false }
         phase = clock.phase
         updateClock(at: date)
+        updateLiveActivity(force: true)
         checkpoint(force: true)
         return true
     }
@@ -129,6 +136,7 @@ final class RunTrackingEngine: NSObject, ObservableObject {
         guard clock.resume(at: date) else { return false }
         phase = clock.phase
         updateClock(at: date)
+        updateLiveActivity(force: true)
         checkpoint(force: true)
         return true
     }
@@ -143,6 +151,7 @@ final class RunTrackingEngine: NSObject, ObservableObject {
         timerTask?.cancel()
         timerTask = nil
         audioCoach.stop()
+        RunLiveActivityManager.end(runID: runID)
 
         let metadata = RunDiagnosticMetadata(
             appVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown",
@@ -185,6 +194,7 @@ final class RunTrackingEngine: NSObject, ObservableObject {
         timerTask?.cancel()
         timerTask = nil
         audioCoach.stop()
+        RunLiveActivityManager.end(runID: runID)
         RunSessionStore.clear()
     }
 
@@ -201,7 +211,10 @@ final class RunTrackingEngine: NSObject, ObservableObject {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))
                 guard let self else { return }
-                self.updateClock(at: Date())
+                let now = Date()
+                self.consumeLiveActivityControl(at: now)
+                self.updateClock(at: now)
+                self.updateLiveActivity(force: false)
                 self.checkpoint(force: false)
             }
         }
@@ -209,6 +222,27 @@ final class RunTrackingEngine: NSObject, ObservableObject {
 
     private func updateClock(at date: Date) {
         activeDurationSeconds = clock.activeDuration(at: date)
+    }
+
+    private func consumeLiveActivityControl(at date: Date) {
+        guard let shouldPause = RunLiveActivityManager.consumePauseRequest(runID: runID) else { return }
+        if shouldPause, phase == .recording {
+            _ = pause(at: date)
+        } else if !shouldPause, phase == .paused {
+            _ = resume(at: date)
+        }
+    }
+
+    private func updateLiveActivity(force: Bool) {
+        guard phase == .recording || phase == .paused else { return }
+        RunLiveActivityManager.update(
+            runID: runID,
+            distanceMeters: metrics.distanceMeters,
+            paceSecondsPerKm: currentPaceSecondsPerKm,
+            isPaused: phase == .paused,
+            activeDurationSeconds: activeDurationSeconds,
+            force: force
+        )
     }
 
     private func checkpoint(force: Bool) {
@@ -302,6 +336,7 @@ extension RunTrackingEngine: CLLocationManagerDelegate {
                 announcedSplitCount = metrics.splits.count
             }
             checkpoint(force: false)
+            updateLiveActivity(force: false)
         }
     }
 }
