@@ -23,6 +23,11 @@ struct BackupRun: Codable {
     let importedPaceSecondsPerKm: Double?
     let sportId: Int?
     let sourceName: String?
+    let elevationGainMeters: Double?
+    let elevationLossMeters: Double?
+    let pausedDurationSeconds: Double?
+    let algorithmVersion: String?
+    let nativeArchive: NativeRunArchive?
 }
 
 struct BackupStep: Codable {
@@ -112,7 +117,12 @@ enum BackupDatabase {
                     startTime: $0.startTime,
                     importedPaceSecondsPerKm: $0.importedPaceSecondsPerKm,
                     sportId: $0.sportId,
-                    sourceName: $0.sourceName
+                    sourceName: $0.sourceName,
+                    elevationGainMeters: $0.elevationGainMeters,
+                    elevationLossMeters: $0.elevationLossMeters,
+                    pausedDurationSeconds: $0.pausedDurationSeconds,
+                    algorithmVersion: $0.algorithmVersion,
+                    nativeArchive: $0.nativeArchive
                 )
             },
             steps: steps.map {
@@ -186,7 +196,12 @@ enum BackupDatabase {
                 startTime: item.startTime,
                 importedPaceSecondsPerKm: item.importedPaceSecondsPerKm,
                 sportId: item.sportId,
-                sourceName: item.sourceName
+                sourceName: item.sourceName,
+                elevationGainMeters: item.elevationGainMeters,
+                elevationLossMeters: item.elevationLossMeters,
+                pausedDurationSeconds: item.pausedDurationSeconds,
+                algorithmVersion: item.algorithmVersion,
+                nativeArchiveData: item.nativeArchive.flatMap { try? RunArchiveCodec.encode($0) }
             ))
         }
         for item in payload.steps ?? [] {
