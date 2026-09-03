@@ -22,6 +22,8 @@ targets:
       path: LockedIn/Info.plist
       properties:
         CFBundleDisplayName: "LOCKED IN"
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         NSBluetoothAlwaysUsageDescription: "LOCKED IN verbindet sich kurz mit deiner Etekcity-Waage, um dein Körpergewicht zu übernehmen."
         NSMotionUsageDescription: "LOCKED IN liest die iPhone-Schrittzählung, um deine Steps und Wochenziele anzuzeigen."
         NSLocationWhenInUseUsageDescription: "LOCKED IN verwendet deinen Standort, um Distanz, Pace und Höhenmeter während eines Laufs aufzuzeichnen."
