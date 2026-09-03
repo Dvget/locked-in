@@ -25,8 +25,7 @@ enum RunSessionStore {
         guard let fileURL,
               let data = try? Data(contentsOf: fileURL),
               let checkpoint = try? RunArchiveCodec.decode(RunSessionCheckpoint.self, from: data),
-              now.timeIntervalSince(checkpoint.savedAt) < 24 * 60 * 60,
-              [.recording, .paused].contains(checkpoint.clock.phase) else {
+              checkpoint.isRestorable(at: now) else {
             return nil
         }
         return checkpoint

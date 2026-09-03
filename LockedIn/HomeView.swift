@@ -11,6 +11,7 @@ struct HomeView: View {
 
     @State private var showTrainingSelection = false
     @State private var resumedWorkout: ActiveWorkoutState?
+    @State private var availableRun: RunTrackingEngine?
     @State private var resumedRun: RunTrackingEngine?
 
     private var completed: [WorkoutRecord] {
@@ -146,7 +147,10 @@ struct HomeView: View {
                 Spacer()
                     .frame(height: 8)
 
-                if unfinishedWorkout != nil {
+                if availableRun != nil {
+                    runResumeCard
+                        .frame(height: 92)
+                } else if unfinishedWorkout != nil {
                     resumeCard
                         .frame(height: 92)
                 } else {
@@ -218,7 +222,7 @@ struct HomeView: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
             .background(Color.black)
-            .sheet(isPresented: $showTrainingSelection) { TrainingModeSelectionView() }
+            .fullScreenCover(isPresented: $showTrainingSelection) { TrainingModeSelectionView() }
             .fullScreenCover(item: $resumedWorkout) { workoutState in
                 ActiveWorkoutView(state: workoutState) {
                     resumedWorkout = nil
@@ -227,12 +231,12 @@ struct HomeView: View {
             .fullScreenCover(item: $resumedRun) { engine in
                 ActiveRunView(engine: engine) {
                     resumedRun = nil
+                    availableRun = nil
                 }
             }
             .onAppear {
-                guard resumedRun == nil else { return }
-                resumedRun = RunTrackingEngine.restoreIfAvailable()
-                resumedRun?.prepare()
+                guard availableRun == nil, resumedRun == nil else { return }
+                availableRun = RunTrackingEngine.restoreIfAvailable()
             }
         }
     }
@@ -277,6 +281,41 @@ struct HomeView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Training fortsetzen").font(.title3.bold())
                     Text("Laufende Session")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .foregroundStyle(.secondary)
+            }
+            .padding(16)
+            .background(Color.lockedGreen.opacity(0.12))
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Color.lockedGreen.opacity(0.25), lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var runResumeCard: some View {
+        Button {
+            resumedRun = availableRun
+            resumedRun?.prepare()
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "figure.run.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(.black)
+                    .frame(width: 54, height: 54)
+                    .background(Color.lockedGreen)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Lauf fortsetzen").font(.title3.bold())
+                    Text(availableRun?.phase == .finishing ? "Speichern abschließen" : "Laufende Session")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }

@@ -135,16 +135,11 @@ enum BackupDatabase {
     }
 
     static func encode(_ payload: BackupPayload) throws -> Data {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        encoder.dateEncodingStrategy = .iso8601
-        return try encoder.encode(payload)
+        try RunArchiveCodec.encode(payload)
     }
 
     static func decode(_ data: Data) throws -> BackupPayload {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return try decoder.decode(BackupPayload.self, from: data)
+        try RunArchiveCodec.decode(BackupPayload.self, from: data)
     }
 
     static func replaceDatabase(with payload: BackupPayload, modelContext: ModelContext) throws {

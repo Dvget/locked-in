@@ -9,6 +9,7 @@ struct LockedInRunActivityAttributes: ActivityAttributes {
         var activeDurationSeconds: Int
         var timerAnchor: Date
         var controlRevision: Int
+        var controlDate: Date?
     }
 
     let runID: UUID

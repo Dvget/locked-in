@@ -33,7 +33,7 @@ final class RunTrackingEngine: NSObject, ObservableObject, Identifiable {
     }
 
     var currentPaceSecondsPerKm: Double? {
-        metrics.currentPaceSecondsPerKm
+        gpsReady ? metrics.currentPaceSecondsPerKm : nil
     }
 
     var averagePaceSecondsPerKm: Double? {
@@ -52,6 +52,7 @@ final class RunTrackingEngine: NSObject, ObservableObject, Identifiable {
     private var calculator: RunMetricsCalculator
     private var timerTask: Task<Void, Never>?
     private var lastCheckpointAt = Date.distantPast
+    private var lastUsableFixAt: Date?
     private var announcedSplitCount = 0
 
     init(
@@ -101,9 +102,12 @@ final class RunTrackingEngine: NSObject, ObservableObject, Identifiable {
         }
         if [.recording, .paused].contains(phase), let startedAt = clock.startedAt {
             RunLiveActivityManager.start(runID: runID, startedAt: startedAt)
+            consumeLiveActivityControl(at: Date())
             updateLiveActivity(force: true)
         }
-        startTimerIfNeeded()
+        if phase == .recording || phase == .paused {
+            startTimerIfNeeded()
+        }
     }
 
     func beginCountdown() -> Bool {
@@ -126,6 +130,8 @@ final class RunTrackingEngine: NSObject, ObservableObject, Identifiable {
 
     func pause(at date: Date = Date()) -> Bool {
         guard clock.pause(at: date) else { return false }
+        calculator.beginPause()
+        metrics = calculator.currentSnapshot
         phase = clock.phase
         updateClock(at: date)
         updateLiveActivity(force: true)
@@ -135,6 +141,8 @@ final class RunTrackingEngine: NSObject, ObservableObject, Identifiable {
 
     func resume(at date: Date = Date()) -> Bool {
         guard clock.resume(at: date) else { return false }
+        calculator.endPause()
+        metrics = calculator.currentSnapshot
         phase = clock.phase
         updateClock(at: date)
         updateLiveActivity(force: true)
@@ -143,7 +151,7 @@ final class RunTrackingEngine: NSObject, ObservableObject, Identifiable {
     }
 
     func finish(at date: Date = Date()) throws -> RunFinishedPayload {
-        guard clock.finish(at: date), let startedAt = clock.startedAt else {
+        guard clock.finish(at: date), clock.startedAt != nil else {
             throw RunTrackingError.invalidState
         }
         phase = clock.phase
@@ -154,6 +162,18 @@ final class RunTrackingEngine: NSObject, ObservableObject, Identifiable {
         audioCoach.stop()
         RunLiveActivityManager.end(runID: runID)
 
+        let payload = try makeFinishedPayload(recordedAt: date)
+        checkpoint(force: true)
+        return payload
+    }
+
+    func recoverFinishedPayload() throws -> RunFinishedPayload {
+        guard phase == .finishing else { throw RunTrackingError.invalidState }
+        return try makeFinishedPayload(recordedAt: clock.finishedAt ?? Date())
+    }
+
+    private func makeFinishedPayload(recordedAt date: Date) throws -> RunFinishedPayload {
+        guard let startedAt = clock.startedAt else { throw RunTrackingError.invalidState }
         let metadata = RunDiagnosticMetadata(
             appVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown",
             buildNumber: Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown",
@@ -169,8 +189,6 @@ final class RunTrackingEngine: NSObject, ObservableObject, Identifiable {
             metadata: metadata
         )
         let archiveData = try RunArchiveCodec.encode(archive)
-        checkpoint(force: true)
-
         return RunFinishedPayload(
             runID: runID,
             startedAt: startedAt,
@@ -185,6 +203,9 @@ final class RunTrackingEngine: NSObject, ObservableObject, Identifiable {
     func markSaved() {
         _ = clock.markSaved()
         phase = clock.phase
+        locationManager.stopUpdatingLocation()
+        timerTask?.cancel()
+        timerTask = nil
         RunSessionStore.clear()
     }
 
@@ -215,6 +236,7 @@ final class RunTrackingEngine: NSObject, ObservableObject, Identifiable {
                 let now = Date()
                 self.consumeLiveActivityControl(at: now)
                 self.updateClock(at: now)
+                self.refreshGPSReadiness(at: now)
                 self.updateLiveActivity(force: false)
                 self.checkpoint(force: false)
             }
@@ -226,12 +248,21 @@ final class RunTrackingEngine: NSObject, ObservableObject, Identifiable {
     }
 
     private func consumeLiveActivityControl(at date: Date) {
-        guard let shouldPause = RunLiveActivityManager.consumePauseRequest(runID: runID) else { return }
-        if shouldPause, phase == .recording {
-            _ = pause(at: date)
-        } else if !shouldPause, phase == .paused {
-            _ = resume(at: date)
+        guard let request = RunLiveActivityManager.consumePauseRequest(runID: runID) else { return }
+        let requestDate = min(date, request.requestedAt)
+        if request.shouldPause, phase == .recording {
+            _ = pause(at: requestDate)
+        } else if !request.shouldPause, phase == .paused {
+            _ = resume(at: requestDate)
         }
+    }
+
+    private func refreshGPSReadiness(at date: Date) {
+        guard let lastUsableFixAt else {
+            gpsReady = false
+            return
+        }
+        gpsReady = date.timeIntervalSince(lastUsableFixAt) <= configuration.maximumSampleAge
     }
 
     private func updateLiveActivity(force: Bool) {
@@ -247,7 +278,7 @@ final class RunTrackingEngine: NSObject, ObservableObject, Identifiable {
     }
 
     private func checkpoint(force: Bool) {
-        guard [.recording, .paused].contains(clock.phase) else { return }
+        guard [.recording, .paused, .finishing].contains(clock.phase) else { return }
         let now = Date()
         guard force || now.timeIntervalSince(lastCheckpointAt) >= 10 else { return }
         lastCheckpointAt = now
@@ -292,12 +323,14 @@ extension RunTrackingEngine: CLLocationManagerDelegate {
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         Task { @MainActor [weak self] in
             self?.lastError = error.localizedDescription
+            self?.gpsReady = false
         }
     }
 
     private func handle(_ locations: [CLLocation]) {
         let receivedAt = Date()
         for location in locations {
+            consumeLiveActivityControl(at: receivedAt)
             let sample = RunLocationSample(
                 timestamp: location.timestamp,
                 latitude: location.coordinate.latitude,
@@ -315,6 +348,7 @@ extension RunTrackingEngine: CLLocationManagerDelegate {
             )
             if readiness.accepted {
                 gpsReady = true
+                lastUsableFixAt = receivedAt
                 lastError = nil
             }
 

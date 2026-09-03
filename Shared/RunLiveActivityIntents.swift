@@ -24,6 +24,7 @@ struct ToggleRunPauseIntent: LiveActivityIntent {
             state.isPaused = true
         }
         state.controlRevision += 1
+        state.controlDate = now
 
         await activity.update(ActivityContent(state: state, staleDate: nil))
         return .result()

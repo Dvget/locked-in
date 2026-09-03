@@ -101,4 +101,9 @@ struct RunSessionCheckpoint: Codable, Equatable {
     let metrics: RunMetricsSnapshot
     let speechEnabled: Bool
     let savedAt: Date
+
+    func isRestorable(at date: Date = Date()) -> Bool {
+        date.timeIntervalSince(savedAt) < 24 * 60 * 60
+            && [.recording, .paused, .finishing].contains(clock.phase)
+    }
 }

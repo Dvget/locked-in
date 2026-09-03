@@ -2,8 +2,13 @@ import AVFoundation
 import Foundation
 
 @MainActor
-final class RunAudioCoach {
+final class RunAudioCoach: NSObject, AVSpeechSynthesizerDelegate {
     private let synthesizer = AVSpeechSynthesizer()
+
+    override init() {
+        super.init()
+        synthesizer.delegate = self
+    }
 
     func announceCompletedKilometre(
         _ kilometre: Int,
@@ -36,6 +41,20 @@ final class RunAudioCoach {
 
     func stop() {
         synthesizer.stopSpeaking(at: .immediate)
+        deactivateAudioSession()
+    }
+
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        guard !synthesizer.isSpeaking else { return }
+        deactivateAudioSession()
+    }
+
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        guard !synthesizer.isSpeaking else { return }
+        deactivateAudioSession()
+    }
+
+    private func deactivateAudioSession() {
         try? AVAudioSession.sharedInstance().setActive(
             false,
             options: .notifyOthersOnDeactivation

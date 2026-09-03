@@ -76,41 +76,53 @@ struct ActiveRunView: View {
 
             Spacer(minLength: 20)
 
-            HStack(spacing: 12) {
-                Button {
-                    if engine.phase == .paused {
-                        _ = engine.resume()
-                    } else {
-                        _ = engine.pause()
-                    }
-                } label: {
-                    Label(
-                        engine.phase == .paused ? "Fortsetzen" : "Pause",
-                        systemImage: engine.phase == .paused ? "play.fill" : "pause.fill"
-                    )
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 58)
-                }
-                .buttonStyle(LockedActionButtonStyle(prominent: engine.phase == .paused))
-                .accessibilityIdentifier("run-pause")
-
-                Button {
-                    showStopConfirmation = true
-                } label: {
-                    Label("Stop", systemImage: "stop.fill")
+            if engine.phase == .finishing {
+                Button(action: savePendingRun) {
+                    Label("Lauf erneut speichern", systemImage: "arrow.clockwise")
                         .font(.headline)
-                        .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                         .frame(height: 58)
-                        .background(Color.red.opacity(0.72))
-                        .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
                 }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("run-stop")
+                .buttonStyle(LockedActionButtonStyle(prominent: true))
+                .padding(.horizontal, 16)
+                .padding(.bottom, 18)
+            } else {
+                HStack(spacing: 12) {
+                    Button {
+                        if engine.phase == .paused {
+                            _ = engine.resume()
+                        } else {
+                            _ = engine.pause()
+                        }
+                    } label: {
+                        Label(
+                            engine.phase == .paused ? "Fortsetzen" : "Pause",
+                            systemImage: engine.phase == .paused ? "play.fill" : "pause.fill"
+                        )
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 58)
+                    }
+                    .buttonStyle(LockedActionButtonStyle(prominent: engine.phase == .paused))
+                    .accessibilityIdentifier("run-pause")
+
+                    Button {
+                        showStopConfirmation = true
+                    } label: {
+                        Label("Stop", systemImage: "stop.fill")
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 58)
+                            .background(Color.red.opacity(0.72))
+                            .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("run-stop")
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 18)
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 18)
         }
         .background(
             LinearGradient(
@@ -153,6 +165,15 @@ struct ActiveRunView: View {
             Button("Schließen", role: .cancel) {}
         } message: {
             Text(saveError ?? "Unbekannter Fehler")
+        }
+        .onAppear {
+            guard engine.phase == .finishing, pendingPayload == nil else { return }
+            do {
+                pendingPayload = try engine.recoverFinishedPayload()
+                savePendingRun()
+            } catch {
+                saveError = error.localizedDescription
+            }
         }
     }
 
@@ -226,7 +247,13 @@ struct ActiveRunView: View {
     }
 
     private func savePendingRun() {
-        guard let payload = pendingPayload else { return }
+        if pendingPayload == nil, engine.phase == .finishing {
+            pendingPayload = try? engine.recoverFinishedPayload()
+        }
+        guard let payload = pendingPayload else {
+            saveError = "Die beendeten Laufdaten konnten nicht wiederhergestellt werden."
+            return
+        }
         do {
             let record: RunRecord
             if let pendingRecord {

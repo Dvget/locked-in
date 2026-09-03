@@ -199,16 +199,34 @@ struct RunMetricsCalculator {
     ) {
         self.init(configuration: configuration)
         for decision in decisions {
-            _ = ingest(
-                decision.sample,
-                receivedAt: decision.sample.timestamp,
-                isPaused: decision.paused
-            )
+            if decision.accepted {
+                _ = ingestAccepted(
+                    decision.sample,
+                    isPaused: decision.paused,
+                    persistedDecision: decision
+                )
+            } else {
+                route.append(decision)
+            }
         }
     }
 
     var currentSnapshot: RunMetricsSnapshot {
         snapshot()
+    }
+
+    mutating func beginPause() {
+        previousActive = nil
+        lastElevationReference = nil
+        paceSegments.removeAll()
+        wasPaused = true
+    }
+
+    mutating func endPause() {
+        previousActive = nil
+        lastElevationReference = nil
+        paceSegments.removeAll()
+        wasPaused = false
     }
 
     mutating func ingest(
@@ -233,26 +251,29 @@ struct RunMetricsCalculator {
             return snapshot()
         }
 
+        return ingestAccepted(sample, isPaused: isPaused)
+    }
+
+    private mutating func ingestAccepted(
+        _ sample: RunLocationSample,
+        isPaused: Bool,
+        persistedDecision: RunLocationDecision? = nil
+    ) -> RunMetricsSnapshot {
         previousAccepted = sample
 
         if isPaused {
-            route.append(RunLocationDecision(
+            route.append(persistedDecision ?? RunLocationDecision(
                 sample: sample,
                 accepted: true,
                 cumulativeDistanceMeters: distanceMeters,
                 paused: true
             ))
-            previousActive = nil
-            lastElevationReference = nil
-            wasPaused = true
+            beginPause()
             return snapshot()
         }
 
         if wasPaused {
-            previousActive = nil
-            lastElevationReference = nil
-            paceSegments.removeAll()
-            wasPaused = false
+            endPause()
         }
 
         let distanceBeforeSegment = distanceMeters
@@ -285,7 +306,7 @@ struct RunMetricsCalculator {
 
         self.previousActive = sample
         trimPaceSegments(at: sample.timestamp)
-        route.append(RunLocationDecision(
+        route.append(persistedDecision ?? RunLocationDecision(
             sample: sample,
             accepted: true,
             cumulativeDistanceMeters: distanceMeters,

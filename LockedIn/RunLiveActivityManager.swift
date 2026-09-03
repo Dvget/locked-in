@@ -1,6 +1,11 @@
 import ActivityKit
 import Foundation
 
+struct RunLiveActivityControlRequest {
+    let shouldPause: Bool
+    let requestedAt: Date
+}
+
 @MainActor
 enum RunLiveActivityManager {
     private static var activity: Activity<LockedInRunActivityAttributes>?
@@ -19,8 +24,7 @@ enum RunLiveActivityManager {
 
         if let existing = matchingActivity(runID: runID) {
             activity = existing
-            lastHandledControlRevision = existing.content.state.controlRevision
-            Task { await existing.update(ActivityContent(state: state, staleDate: nil)) }
+            lastHandledControlRevision = 0
             return
         }
 
@@ -45,6 +49,7 @@ enum RunLiveActivityManager {
         force: Bool = false
     ) {
         guard let current = matchingActivity(runID: runID) else { return }
+        guard current.content.state.controlRevision <= lastHandledControlRevision else { return }
         let now = Date()
         guard force || now.timeIntervalSince(lastUpdateAt) >= 5 else { return }
         lastUpdateAt = now
@@ -59,13 +64,16 @@ enum RunLiveActivityManager {
         Task { await current.update(ActivityContent(state: state, staleDate: nil)) }
     }
 
-    static func consumePauseRequest(runID: UUID) -> Bool? {
+    static func consumePauseRequest(runID: UUID) -> RunLiveActivityControlRequest? {
         guard let state = matchingActivity(runID: runID)?.content.state,
               state.controlRevision > lastHandledControlRevision else {
             return nil
         }
         lastHandledControlRevision = state.controlRevision
-        return state.isPaused
+        return RunLiveActivityControlRequest(
+            shouldPause: state.isPaused,
+            requestedAt: state.controlDate ?? Date()
+        )
     }
 
     static func end(runID: UUID) {
@@ -102,7 +110,8 @@ enum RunLiveActivityManager {
             isPaused: isPaused,
             activeDurationSeconds: max(0, activeDurationSeconds),
             timerAnchor: now.addingTimeInterval(-TimeInterval(max(0, activeDurationSeconds))),
-            controlRevision: controlRevision
+            controlRevision: controlRevision,
+            controlDate: nil
         )
     }
 }
