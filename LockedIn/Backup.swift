@@ -18,6 +18,11 @@ struct BackupRun: Codable {
     let durationSeconds: Double
     let source: String
     let isHidden: Bool?
+    let externalId: String?
+    let startTime: Date?
+    let importedPaceSecondsPerKm: Double?
+    let sportId: Int?
+    let sourceName: String?
 }
 
 struct BackupStep: Codable {
@@ -96,7 +101,19 @@ enum BackupDatabase {
                 BackupSet(id: $0.id, workoutID: $0.workoutID, exerciseID: $0.exerciseID, exerciseName: $0.exerciseName, planSlot: $0.planSlot, setNumber: $0.setNumber, weight: $0.weight, reps: $0.reps, rir: $0.rir, completedAt: $0.completedAt)
             },
             runs: runs.map {
-                BackupRun(id: $0.id, date: $0.date, distanceKm: $0.distanceKm, durationSeconds: $0.durationSeconds, source: $0.source, isHidden: $0.isHidden)
+                BackupRun(
+                    id: $0.id,
+                    date: $0.date,
+                    distanceKm: $0.distanceKm,
+                    durationSeconds: $0.durationSeconds,
+                    source: $0.source,
+                    isHidden: $0.isHidden,
+                    externalId: $0.externalId,
+                    startTime: $0.startTime,
+                    importedPaceSecondsPerKm: $0.importedPaceSecondsPerKm,
+                    sportId: $0.sportId,
+                    sourceName: $0.sourceName
+                )
             },
             steps: steps.map {
                 BackupStep(id: $0.id, date: $0.date, steps: $0.steps, source: $0.source)
@@ -158,7 +175,19 @@ enum BackupDatabase {
         }
 
         for item in payload.runs ?? [] {
-            modelContext.insert(RunRecord(id: item.id, date: item.date, distanceKm: item.distanceKm, durationSeconds: item.durationSeconds, source: item.source, isHidden: item.isHidden ?? false))
+            modelContext.insert(RunRecord(
+                id: item.id,
+                date: item.date,
+                distanceKm: item.distanceKm,
+                durationSeconds: item.durationSeconds,
+                source: item.source,
+                isHidden: item.isHidden ?? false,
+                externalId: item.externalId,
+                startTime: item.startTime,
+                importedPaceSecondsPerKm: item.importedPaceSecondsPerKm,
+                sportId: item.sportId,
+                sourceName: item.sourceName
+            ))
         }
         for item in payload.steps ?? [] {
             modelContext.insert(StepRecord(id: item.id, date: item.date, steps: item.steps, source: item.source))

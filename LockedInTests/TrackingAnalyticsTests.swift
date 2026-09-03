@@ -16,6 +16,54 @@ final class TrackingAnalyticsTests: XCTestCase {
         return formatter.date(from: value)!
     }
 
+    func testPolarPayloadDecodesOffsetStartTimeAndMetadata() throws {
+        let data = Data(#"""
+        {
+          "ok": true,
+          "source": "polar",
+          "count": 1,
+          "runs": [{
+            "externalId": "polar-run-1",
+            "source": "polar",
+            "date": "2026-09-02",
+            "startTime": "2026-09-02T18:12:44+02:00",
+            "distanceKm": 5.25,
+            "durationSeconds": 1800,
+            "paceSecondsPerKm": 342.857,
+            "sportId": 1,
+            "name": "Laufen"
+          }]
+        }
+        """#.utf8)
+
+        let response = try PolarRunsResponse.decode(data)
+
+        XCTAssertEqual(response.runs.count, 1)
+        XCTAssertEqual(response.runs[0].externalId, "polar-run-1")
+        XCTAssertEqual(response.runs[0].distanceKm, 5.25, accuracy: 0.001)
+        XCTAssertEqual(response.runs[0].sportId, 1)
+        XCTAssertEqual(response.runs[0].name, "Laufen")
+        XCTAssertNotNil(response.runs[0].parsedStartTime)
+    }
+
+    func testPolarDeduplicationOnlyFiltersMatchingPolarIdentity() {
+        let candidates = [
+            PolarRunPayload(externalId: "same", source: "polar", date: "2026-09-02", startTime: "2026-09-02T18:00:00+02:00", distanceKm: 5, durationSeconds: 1800, paceSecondsPerKm: 360, sportId: 1, name: "Laufen"),
+            PolarRunPayload(externalId: "new", source: "polar", date: "2026-09-03", startTime: "2026-09-03T18:00:00+02:00", distanceKm: 6, durationSeconds: 2100, paceSecondsPerKm: 350, sportId: 1, name: "Laufen")
+        ]
+
+        let unseen = PolarRunPayload.unseen(candidates, existingPolarExternalIds: ["same"])
+
+        XCTAssertEqual(unseen.map(\.externalId), ["new"])
+    }
+
+    func testWeeklyGoalStatusAccountsForBothActivityGoalsAndRemainingDays() {
+        XCTAssertEqual(TrackingAnalytics.weeklyGoalStatus(completed: 1, otherCompleted: 1, remainingDays: 4), .green)
+        XCTAssertEqual(TrackingAnalytics.weeklyGoalStatus(completed: 1, otherCompleted: 1, remainingDays: 2), .yellow)
+        XCTAssertEqual(TrackingAnalytics.weeklyGoalStatus(completed: 1, otherCompleted: 0, remainingDays: 2), .red)
+        XCTAssertEqual(TrackingAnalytics.weeklyGoalStatus(completed: 2, otherCompleted: 0, remainingDays: 1), .green)
+    }
+
     func testRunSummaryUsesRolling28DaysAndDistanceWeightedPace() {
         let now = date("2026-09-01")
         let samples = [

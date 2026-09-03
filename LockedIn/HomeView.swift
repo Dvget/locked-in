@@ -113,6 +113,29 @@ struct HomeView: View {
         }
     }
 
+    private var remainingDaysThisWeek: Int {
+        guard let interval = currentWeekInterval else { return 0 }
+        let today = trackingCalendar.startOfDay(for: Date())
+        let lastDay = trackingCalendar.date(byAdding: .day, value: -1, to: interval.end) ?? today
+        return max(0, (trackingCalendar.dateComponents([.day], from: today, to: lastDay).day ?? 0) + 1)
+    }
+
+    private var strengthGoalColor: Color {
+        color(for: TrackingAnalytics.weeklyGoalStatus(
+            completed: workoutsThisWeek,
+            otherCompleted: runsThisWeek,
+            remainingDays: remainingDaysThisWeek
+        ))
+    }
+
+    private var runGoalColor: Color {
+        color(for: TrackingAnalytics.weeklyGoalStatus(
+            completed: runsThisWeek,
+            otherCompleted: workoutsThisWeek,
+            remainingDays: remainingDaysThisWeek
+        ))
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 10) {
@@ -140,7 +163,7 @@ struct HomeView: View {
                         accent: true,
                         minContentHeight: 100,
                         dashboardEmphasis: true,
-                        primaryColor: Color.lockedGreen,
+                        primaryColor: strengthGoalColor,
                         secondaryColor: strengthProgressColor,
                         iconAccent: false
                     )
@@ -157,7 +180,7 @@ struct HomeView: View {
                         secondary: runWeekChangeText,
                         minContentHeight: 100,
                         dashboardEmphasis: true,
-                        primaryColor: runsThisWeek > 0 ? Color.lockedGreen : nil,
+                        primaryColor: runGoalColor,
                         secondaryColor: runWeekChangeColor,
                         iconAccent: false
                     )
@@ -314,6 +337,14 @@ struct HomeView: View {
                 slotIndex: 0,
                 timerEndDate: nil
             )
+        }
+    }
+
+    private func color(for status: TrackingAnalytics.Status) -> Color {
+        switch status {
+        case .green: return Color.lockedGreen
+        case .yellow: return .yellow
+        case .red: return .red
         }
     }
 }

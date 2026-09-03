@@ -9,14 +9,36 @@ final class RunRecord {
     var durationSeconds: Double = 0
     var source: String = "manual"
     var isHidden: Bool = false
+    var externalId: String? = nil
+    var startTime: Date? = nil
+    var importedPaceSecondsPerKm: Double? = nil
+    var sportId: Int? = nil
+    var sourceName: String? = nil
 
-    init(id: UUID = UUID(), date: Date = Date(), distanceKm: Double, durationSeconds: Double, source: String = "manual", isHidden: Bool = false) {
+    init(
+        id: UUID = UUID(),
+        date: Date = Date(),
+        distanceKm: Double,
+        durationSeconds: Double,
+        source: String = "manual",
+        isHidden: Bool = false,
+        externalId: String? = nil,
+        startTime: Date? = nil,
+        importedPaceSecondsPerKm: Double? = nil,
+        sportId: Int? = nil,
+        sourceName: String? = nil
+    ) {
         self.id = id
         self.date = date
         self.distanceKm = distanceKm
         self.durationSeconds = durationSeconds
         self.source = source
         self.isHidden = isHidden
+        self.externalId = externalId
+        self.startTime = startTime
+        self.importedPaceSecondsPerKm = importedPaceSecondsPerKm
+        self.sportId = sportId
+        self.sourceName = sourceName
     }
 
     var paceSecondsPerKm: Double {

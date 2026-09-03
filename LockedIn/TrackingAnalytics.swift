@@ -299,6 +299,24 @@ enum TrackingAnalytics {
         return .green
     }
 
+    static func weeklyGoalStatus(
+        completed: Int,
+        otherCompleted: Int,
+        remainingDays: Int,
+        target: Int = 2
+    ) -> Status {
+        if completed >= target { return .green }
+
+        let ownMissing = max(0, target - completed)
+        let otherMissing = max(0, target - otherCompleted)
+        let totalMissing = ownMissing + otherMissing
+        let days = max(0, remainingDays)
+
+        if totalMissing > days { return .red }
+        if totalMissing == days { return .yellow }
+        return .green
+    }
+
     static func cumulativeIndex(
         changes: [Double],
         baseline: Double = 100
