@@ -11,7 +11,7 @@ let package = Package(
         .target(
             name: "LockedInAnalytics",
             path: "LockedIn",
-            sources: ["TrackingAnalytics.swift", "PolarRunPayload.swift"]
+            sources: ["TrackingAnalytics.swift", "PolarRunPayload.swift", "RunTrackingCore.swift"]
         ),
         .testTarget(
             name: "LockedInAnalyticsTests",
