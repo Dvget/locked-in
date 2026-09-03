@@ -32,6 +32,10 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             build
+      - name: Verify running background location capability
+        run: |
+          APP_PLIST="build/Build/Products/Debug-iphoneos/LOCKED IN.app/Info.plist"
+          /usr/libexec/PlistBuddy -c "Print :UIBackgroundModes" "$APP_PLIST" | grep -q "location"
       - name: Package IPA
         run: |
           mkdir -p Payload
