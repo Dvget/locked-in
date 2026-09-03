@@ -193,6 +193,24 @@ struct RunMetricsCalculator {
         self.filter = RunLocationFilter(configuration: configuration)
     }
 
+    init(
+        configuration: RunTrackingConfiguration = .version1,
+        replaying decisions: [RunLocationDecision]
+    ) {
+        self.init(configuration: configuration)
+        for decision in decisions {
+            _ = ingest(
+                decision.sample,
+                receivedAt: decision.sample.timestamp,
+                isPaused: decision.paused
+            )
+        }
+    }
+
+    var currentSnapshot: RunMetricsSnapshot {
+        snapshot()
+    }
+
     mutating func ingest(
         _ sample: RunLocationSample,
         receivedAt: Date = Date(),
