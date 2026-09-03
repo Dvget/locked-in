@@ -69,6 +69,12 @@ enum TrackingAnalytics {
         let totalReps: Int
     }
 
+    struct ExerciseBestSet {
+        let weightKg: Double
+        let reps: Int
+        let estimatedStrengthKg: Double
+    }
+
     struct StepBucket: Identifiable {
         let date: Date
         let label: String
@@ -293,6 +299,24 @@ enum TrackingAnalytics {
         return .green
     }
 
+    static func weeklyGoalStatus(
+        completed: Int,
+        otherCompleted: Int,
+        remainingDays: Int,
+        target: Int = 2
+    ) -> Status {
+        if completed >= target { return .green }
+
+        let ownMissing = max(0, target - completed)
+        let otherMissing = max(0, target - otherCompleted)
+        let totalMissing = ownMissing + otherMissing
+        let days = max(0, remainingDays)
+
+        if totalMissing > days { return .red }
+        if totalMissing == days { return .yellow }
+        return .green
+    }
+
     static func cumulativeIndex(
         changes: [Double],
         baseline: Double = 100
@@ -326,6 +350,23 @@ enum TrackingAnalytics {
             maximumWeightKg: maximumWeight,
             totalReps: completed.reduce(0) { $0 + $1.reps }
         )
+    }
+
+    static func exerciseBestSet(_ samples: [ExerciseSetSample]) -> ExerciseBestSet? {
+        samples.compactMap { sample -> ExerciseBestSet? in
+            guard sample.weightKg > 0, sample.reps > 0 else { return nil }
+            return ExerciseBestSet(
+                weightKg: sample.weightKg,
+                reps: sample.reps,
+                estimatedStrengthKg: sample.weightKg * (1 + Double(sample.reps) / 30)
+            )
+        }
+        .max { first, second in
+            if first.estimatedStrengthKg == second.estimatedStrengthKg {
+                return first.weightKg < second.weightKg
+            }
+            return first.estimatedStrengthKg < second.estimatedStrengthKg
+        }
     }
 
     static func percentageChange(from first: Double, to last: Double) -> Double? {

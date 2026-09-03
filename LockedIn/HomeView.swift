@@ -9,8 +9,10 @@ struct HomeView: View {
     @Query(sort: \StepRecord.date, order: .reverse) private var steps: [StepRecord]
     @Query(sort: \WeightRecord.date, order: .reverse) private var weights: [WeightRecord]
 
-    @State private var showPlan = false
+    @State private var showTrainingSelection = false
     @State private var resumedWorkout: ActiveWorkoutState?
+    @State private var availableRun: RunTrackingEngine?
+    @State private var resumedRun: RunTrackingEngine?
 
     private var completed: [WorkoutRecord] {
         workouts.filter { $0.isCompleted && !$0.isHidden }
@@ -113,6 +115,29 @@ struct HomeView: View {
         }
     }
 
+    private var remainingDaysThisWeek: Int {
+        guard let interval = currentWeekInterval else { return 0 }
+        let today = trackingCalendar.startOfDay(for: Date())
+        let lastDay = trackingCalendar.date(byAdding: .day, value: -1, to: interval.end) ?? today
+        return max(0, (trackingCalendar.dateComponents([.day], from: today, to: lastDay).day ?? 0) + 1)
+    }
+
+    private var strengthGoalColor: Color {
+        color(for: TrackingAnalytics.weeklyGoalStatus(
+            completed: workoutsThisWeek,
+            otherCompleted: runsThisWeek,
+            remainingDays: remainingDaysThisWeek
+        ))
+    }
+
+    private var runGoalColor: Color {
+        color(for: TrackingAnalytics.weeklyGoalStatus(
+            completed: runsThisWeek,
+            otherCompleted: workoutsThisWeek,
+            remainingDays: remainingDaysThisWeek
+        ))
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 10) {
@@ -122,7 +147,10 @@ struct HomeView: View {
                 Spacer()
                     .frame(height: 8)
 
-                if unfinishedWorkout != nil {
+                if availableRun != nil {
+                    runResumeCard
+                        .frame(height: 92)
+                } else if unfinishedWorkout != nil {
                     resumeCard
                         .frame(height: 92)
                 } else {
@@ -140,7 +168,7 @@ struct HomeView: View {
                         accent: true,
                         minContentHeight: 100,
                         dashboardEmphasis: true,
-                        primaryColor: Color.lockedGreen,
+                        primaryColor: strengthGoalColor,
                         secondaryColor: strengthProgressColor,
                         iconAccent: false
                     )
@@ -157,7 +185,7 @@ struct HomeView: View {
                         secondary: runWeekChangeText,
                         minContentHeight: 100,
                         dashboardEmphasis: true,
-                        primaryColor: runsThisWeek > 0 ? Color.lockedGreen : nil,
+                        primaryColor: runGoalColor,
                         secondaryColor: runWeekChangeColor,
                         iconAccent: false
                     )
@@ -170,8 +198,8 @@ struct HomeView: View {
                 } label: {
                     TrackingCategoryCard(
                         category: .steps,
-                        primary: averageStepsThisWeek.map { "Ø \($0.formatted()) Schritte" } ?? "Noch keine Daten",
-                        secondary: averageStepsThisWeek == nil ? "Noch kein abgeschlossener Tag" : "Durchschnitt bis gestern",
+                        primary: averageStepsThisWeek.map { "Ø \($0.formatted())" } ?? "Noch keine Daten",
+                        secondary: averageStepsThisWeek == nil ? "Noch kein abgeschlossener Tag" : "Wochenschnitt",
                         minContentHeight: 100,
                         dashboardEmphasis: true,
                         primaryColor: averageStepsThisWeek == nil ? nil : stepStatusColor,
@@ -194,11 +222,21 @@ struct HomeView: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
             .background(Color.black)
-            .sheet(isPresented: $showPlan) { WorkoutPlanView() }
+            .fullScreenCover(isPresented: $showTrainingSelection) { TrainingModeSelectionView() }
             .fullScreenCover(item: $resumedWorkout) { workoutState in
                 ActiveWorkoutView(state: workoutState) {
                     resumedWorkout = nil
                 }
+            }
+            .fullScreenCover(item: $resumedRun) { engine in
+                ActiveRunView(engine: engine) {
+                    resumedRun = nil
+                    availableRun = nil
+                }
+            }
+            .onAppear {
+                guard availableRun == nil, resumedRun == nil else { return }
+                availableRun = RunTrackingEngine.restoreIfAvailable()
             }
         }
     }
@@ -217,9 +255,6 @@ struct HomeView: View {
                     Text("Gewicht")
                         .font(.title3.bold())
                         .foregroundStyle(.white)
-                    Text("Gewichtsübersicht und Waage")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
                 }
 
                 Spacer()
@@ -265,8 +300,43 @@ struct HomeView: View {
         .buttonStyle(.plain)
     }
 
+    private var runResumeCard: some View {
+        Button {
+            resumedRun = availableRun
+            resumedRun?.prepare()
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "figure.run.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(.black)
+                    .frame(width: 54, height: 54)
+                    .background(Color.lockedGreen)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Lauf fortsetzen").font(.title3.bold())
+                    Text(availableRun?.phase == .finishing ? "Speichern abschließen" : "Laufende Session")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .foregroundStyle(.secondary)
+            }
+            .padding(16)
+            .background(Color.lockedGreen.opacity(0.12))
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Color.lockedGreen.opacity(0.25), lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
     private var startCard: some View {
-        Button { showPlan = true } label: {
+        Button { showTrainingSelection = true } label: {
             HStack(spacing: 12) {
                 Image(systemName: "play.fill")
                     .font(.title2)
@@ -277,9 +347,6 @@ struct HomeView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Training starten").font(.title2.bold())
-                    Text("Neues Krafttraining beginnen")
-                        .font(.subheadline)
-                        .foregroundStyle(Color.lockedGreen)
                 }
 
                 Spacer()
@@ -314,6 +381,14 @@ struct HomeView: View {
                 slotIndex: 0,
                 timerEndDate: nil
             )
+        }
+    }
+
+    private func color(for status: TrackingAnalytics.Status) -> Color {
+        switch status {
+        case .green: return Color.lockedGreen
+        case .yellow: return .yellow
+        case .red: return .red
         }
     }
 }

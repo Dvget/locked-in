@@ -95,12 +95,19 @@ struct SettingsView: View {
                     }
                 }
 
-                Section("Datenbank") {
+                Section("Running-Testphase") {
                     Button {
                         prepareExport()
                     } label: {
-                        Label("JSON-Backup exportieren", systemImage: "square.and.arrow.up")
+                        Label("Tracking-Daten exportieren", systemImage: "square.and.arrow.up")
                     }
+
+                    Text("Exportiert alle Trainings- und Laufdaten einschließlich der GPS-Rohdaten nativer LOCKED-IN-Läufe. Damit lassen sich Messabweichungen später nachvollziehen.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
+                Section("Datenbank") {
 
                     Button {
                         showImporter = true
@@ -114,7 +121,7 @@ struct SettingsView: View {
                 }
 
                 Section("LOCKED IN") {
-                    LabeledContent("Version", value: "0.5.3")
+                    LabeledContent("Version", value: "0.7.0")
                     Text("Trainingsdaten liegen primär lokal in SwiftData. JSON-Backups dienen als zusätzliche Sicherung und können wieder importiert werden.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
@@ -195,7 +202,7 @@ struct SettingsView: View {
     private var defaultFilename: String {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd-HHmm"
-        return "LockedIn-Backup-\(formatter.string(from: Date()))"
+        return "LockedIn-Tracking-\(formatter.string(from: Date()))"
     }
 
     private func createBackupNow() {
