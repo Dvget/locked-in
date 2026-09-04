@@ -19,6 +19,7 @@ struct ActiveRunView: View {
                 RunCompletionSummaryView(
                     payload: pendingPayload,
                     onSave: savePendingRun,
+                    onContinue: continuePendingRun,
                     onDiscard: { showDiscardConfirmation = true }
                 )
             } else if engine.phase == .finishing {
@@ -38,14 +39,14 @@ struct ActiveRunView: View {
             .ignoresSafeArea()
         )
         .confirmationDialog(
-            "Lauf beenden?",
+            "Lauf wirklich beenden?",
             isPresented: $showStopConfirmation,
             titleVisibility: .visible
         ) {
             Button("Lauf beenden", role: .destructive) { stopRun() }
             Button("Weiterlaufen", role: .cancel) {}
         } message: {
-            Text("Die Aufzeichnung wird gestoppt. Anschließend kannst du den Lauf prüfen, speichern oder verwerfen.")
+            Text("Die Aufzeichnung wird angehalten und die Laufübersicht geöffnet. Bis zum Speichern oder Verwerfen bleiben deine aufgezeichneten Daten erhalten.")
         }
         .alert("Lauf wirklich verwerfen?", isPresented: $showDiscardConfirmation) {
             Button("Abbrechen", role: .cancel) {}
@@ -68,10 +69,17 @@ struct ActiveRunView: View {
         } message: {
             Text(saveError ?? "Unbekannter Fehler")
         }
-        .onAppear(perform: recoverSummaryIfNeeded)
+        .onAppear {
+            recoverSummaryIfNeeded()
+            handleExternalFinishRequest()
+        }
         .onChange(of: engine.phase) { _, phase in
             guard phase == .finishing else { return }
             recoverSummaryIfNeeded()
+        }
+        .onChange(of: engine.finishConfirmationRequested) { _, requested in
+            guard requested else { return }
+            handleExternalFinishRequest()
         }
     }
 
@@ -273,12 +281,32 @@ struct ActiveRunView: View {
         }
     }
 
+    private func handleExternalFinishRequest() {
+        guard engine.finishConfirmationRequested else { return }
+        engine.clearFinishConfirmationRequest()
+        showStopConfirmation = true
+    }
+
     private func stopRun() {
         do {
             pendingPayload = try engine.finish()
         } catch {
             saveError = error.localizedDescription
         }
+    }
+
+    private func continuePendingRun() {
+        if let pendingRecord {
+            modelContext.delete(pendingRecord)
+            self.pendingRecord = nil
+            try? modelContext.save()
+        }
+        guard engine.continueAfterFinish() else {
+            saveError = "Der Lauf konnte nicht fortgesetzt werden."
+            return
+        }
+        pendingPayload = nil
+        saveError = nil
     }
 
     private func recoverSummaryIfNeeded() {
@@ -367,6 +395,7 @@ struct ActiveRunView: View {
 private struct RunCompletionSummaryView: View {
     let payload: RunFinishedPayload
     let onSave: () -> Void
+    let onContinue: () -> Void
     let onDiscard: () -> Void
 
     private let columns = [
@@ -423,7 +452,7 @@ private struct RunCompletionSummaryView: View {
 
             Spacer(minLength: 20)
 
-            VStack(spacing: 12) {
+            VStack(spacing: 10) {
                 Button(action: onSave) {
                     Label("Lauf speichern", systemImage: "checkmark.circle.fill")
                         .font(.headline)
@@ -432,12 +461,23 @@ private struct RunCompletionSummaryView: View {
                 }
                 .buttonStyle(LockedActionButtonStyle(prominent: true))
 
+                Button(action: onContinue) {
+                    Label("Lauf fortsetzen", systemImage: "play.fill")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 54)
+                        .background(Color.white.opacity(0.08))
+                        .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+                }
+                .buttonStyle(.plain)
+
                 Button(action: onDiscard) {
                     Label("Lauf verwerfen", systemImage: "trash")
                         .font(.headline)
                         .foregroundStyle(.red)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 54)
+                        .frame(height: 50)
                         .background(Color.white.opacity(0.06))
                         .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
                 }
