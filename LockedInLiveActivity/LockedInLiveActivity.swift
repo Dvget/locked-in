@@ -208,9 +208,12 @@ struct LockedInRunLiveActivity: Widget {
                                 .resizable()
                                 .renderingMode(.original)
                                 .scaledToFit()
-                                .frame(width: 21, height: 21)
+                                .frame(
+                                    width: context.state.isPaused ? 21 : 27,
+                                    height: context.state.isPaused ? 21 : 27
+                                )
                             Text("RUNNING")
-                                .font(.caption2.weight(.bold))
+                                .font(context.state.isPaused ? .caption2.weight(.bold) : .caption.weight(.bold))
                                 .tracking(1.2)
                                 .foregroundStyle(green)
                         }
@@ -219,22 +222,36 @@ struct LockedInRunLiveActivity: Widget {
 
                         Button(intent: ToggleRunSpeechIntent()) {
                             Image(systemName: context.state.speechEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill")
-                                .font(.caption2.weight(.bold))
+                                .font(.caption.weight(.bold))
                                 .foregroundStyle(context.state.speechEnabled ? green : Color.secondary)
-                                .frame(width: 28, height: 28)
+                                .frame(
+                                    width: context.state.isPaused ? 28 : 30,
+                                    height: context.state.isPaused ? 28 : 30
+                                )
                                 .background(Color.white.opacity(0.08))
                                 .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
                         }
                         .buttonStyle(.plain)
                     }
+                    .frame(maxWidth: .infinity)
 
-                    runTimer(context.state)
-                        .font(.system(size: 26, weight: .bold, design: .rounded))
-                        .minimumScaleFactor(0.72)
-                        .lineLimit(1)
-                        .frame(maxWidth: .infinity, alignment: .center)
+                    GeometryReader { proxy in
+                        runTimer(context.state)
+                            .font(.system(
+                                size: context.state.isPaused ? 26 : 32,
+                                weight: .bold,
+                                design: .rounded
+                            ))
+                            .minimumScaleFactor(0.68)
+                            .lineLimit(1)
+                            .multilineTextAlignment(.center)
+                            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .center)
+                            .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
+                            .allowsHitTesting(false)
+                    }
                 }
-                .frame(height: 28)
+                .frame(maxWidth: .infinity)
+                .frame(height: context.state.isPaused ? 28 : 34)
 
                 if context.state.isPaused {
                     HStack(spacing: 7) {
@@ -285,9 +302,9 @@ struct LockedInRunLiveActivity: Widget {
 
                         Button(intent: ToggleRunPauseIntent()) {
                             Image(systemName: "pause.fill")
-                                .font(.title3.weight(.bold))
+                                .font(.system(size: 28, weight: .bold))
                                 .foregroundStyle(.white)
-                                .frame(width: 58, height: 84)
+                                .frame(width: 66, height: 68)
                                 .background(Color.white.opacity(0.10))
                                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                         }
@@ -299,7 +316,7 @@ struct LockedInRunLiveActivity: Widget {
                             compact: false
                         )
                     }
-                    .frame(height: 84)
+                    .frame(height: 68)
                 }
             }
             .padding(.horizontal, 12)
@@ -372,10 +389,10 @@ struct LockedInRunLiveActivity: Widget {
     private func runMetric(value: String, unit: String, compact: Bool) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
             Text(value)
-                .font(.system(size: compact ? 20 : 29, weight: .bold, design: .rounded))
+                .font(.system(size: compact ? 20 : 31, weight: .bold, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(.white)
-                .minimumScaleFactor(0.70)
+                .minimumScaleFactor(0.66)
                 .lineLimit(1)
             Text(unit)
                 .font(compact ? .caption2.weight(.semibold) : .caption.weight(.semibold))
@@ -383,7 +400,7 @@ struct LockedInRunLiveActivity: Widget {
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-        .padding(.horizontal, compact ? 5 : 7)
+        .padding(.horizontal, compact ? 5 : 6)
         .background(Color.white.opacity(0.06))
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
