@@ -84,6 +84,17 @@ struct RunSessionClock: Codable, Equatable {
         return true
     }
 
+    mutating func continueAfterFinish(at date: Date) -> Bool {
+        guard phase == .finishing,
+              let finishedAt,
+              date >= finishedAt else { return false }
+        accumulatedPausedDuration += max(0, date.timeIntervalSince(finishedAt))
+        self.finishedAt = nil
+        pausedAt = nil
+        phase = .recording
+        return true
+    }
+
     mutating func markSaved() -> Bool {
         guard phase == .finishing else { return false }
         phase = .saved
