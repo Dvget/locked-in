@@ -17,7 +17,8 @@ let package = Package(
                 "RunTrackingCore.swift",
                 "RunDiagnosticMetadata.swift",
                 "RunSessionState.swift",
-                "RunSplitLayout.swift"
+                "RunSplitLayout.swift",
+                "RunDisplayFormatting.swift"
             ]
         ),
         .testTarget(
