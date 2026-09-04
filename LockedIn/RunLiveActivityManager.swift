@@ -3,6 +3,8 @@ import Foundation
 
 struct RunLiveActivityControlRequest {
     let shouldPause: Bool
+    let speechEnabled: Bool
+    let finishRequested: Bool
     let requestedAt: Date
 }
 
@@ -13,12 +15,13 @@ enum RunLiveActivityManager {
     private static var lastHandledControlRevision = 0
     private static var mutationTask: Task<Void, Never>?
 
-    static func start(runID: UUID, startedAt: Date) {
+    static func start(runID: UUID, startedAt: Date, speechEnabled: Bool) {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
         let state = contentState(
             distanceMeters: 0,
             paceSecondsPerKm: nil,
             isPaused: false,
+            speechEnabled: speechEnabled,
             activeDurationSeconds: 0,
             controlRevision: 0
         )
@@ -46,6 +49,7 @@ enum RunLiveActivityManager {
         distanceMeters: Double,
         paceSecondsPerKm: Double?,
         isPaused: Bool,
+        speechEnabled: Bool,
         activeDurationSeconds: TimeInterval,
         force: Bool = false
     ) {
@@ -59,6 +63,7 @@ enum RunLiveActivityManager {
             distanceMeters: distanceMeters,
             paceSecondsPerKm: paceSecondsPerKm,
             isPaused: isPaused,
+            speechEnabled: speechEnabled,
             activeDurationSeconds: Int(activeDurationSeconds.rounded(.down)),
             controlRevision: revision
         )
@@ -69,7 +74,7 @@ enum RunLiveActivityManager {
         }
     }
 
-    static func consumePauseRequest(runID: UUID) -> RunLiveActivityControlRequest? {
+    static func consumeControlRequest(runID: UUID) -> RunLiveActivityControlRequest? {
         guard let state = matchingActivity(runID: runID)?.content.state,
               state.controlRevision > lastHandledControlRevision else {
             return nil
@@ -77,6 +82,8 @@ enum RunLiveActivityManager {
         lastHandledControlRevision = state.controlRevision
         return RunLiveActivityControlRequest(
             shouldPause: state.isPaused,
+            speechEnabled: state.speechEnabled,
+            finishRequested: state.finishRequested,
             requestedAt: state.controlDate ?? Date()
         )
     }
@@ -105,6 +112,7 @@ enum RunLiveActivityManager {
         distanceMeters: Double,
         paceSecondsPerKm: Double?,
         isPaused: Bool,
+        speechEnabled: Bool,
         activeDurationSeconds: Int,
         controlRevision: Int
     ) -> LockedInRunActivityAttributes.ContentState {
@@ -113,6 +121,8 @@ enum RunLiveActivityManager {
             distanceMeters: distanceMeters,
             paceSecondsPerKm: paceSecondsPerKm,
             isPaused: isPaused,
+            speechEnabled: speechEnabled,
+            finishRequested: false,
             activeDurationSeconds: max(0, activeDurationSeconds),
             timerAnchor: now.addingTimeInterval(-TimeInterval(max(0, activeDurationSeconds))),
             controlRevision: controlRevision,

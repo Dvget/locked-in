@@ -63,4 +63,20 @@ final class RunSessionLogicTests: XCTestCase {
 
         XCTAssertTrue(checkpoint.isRestorable(at: date(90)))
     }
+
+    func testRunningCountdownOffersOnlyCleanPresetChoices() {
+        XCTAssertEqual(RunCountdownOption.allCases.map(\.seconds), [0, 3, 5, 10])
+        XCTAssertEqual(RunCountdownOption.defaultOption, .threeSeconds)
+        XCTAssertEqual(RunCountdownOption.disabled.displayName, "Ohne")
+        XCTAssertEqual(RunCountdownOption.threeSeconds.displayName, "3 Sekunden")
+    }
+
+    func testCountdownCanBeCancelledBeforeRecordingStarts() {
+        var clock = RunSessionClock()
+
+        XCTAssertTrue(clock.beginCountdown())
+        XCTAssertTrue(clock.cancelCountdown())
+        XCTAssertEqual(clock.phase, .preparing)
+        XCTAssertNil(clock.startedAt)
+    }
 }

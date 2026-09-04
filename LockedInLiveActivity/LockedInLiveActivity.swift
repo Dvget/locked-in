@@ -200,7 +200,7 @@ struct LockedInRunLiveActivity: Widget {
 
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: LockedInRunActivityAttributes.self) { context in
-            VStack(spacing: 14) {
+            VStack(spacing: 11) {
                 HStack {
                     HStack(spacing: 8) {
                         Image("LogoMark")
@@ -214,9 +214,21 @@ struct LockedInRunLiveActivity: Widget {
                             .foregroundStyle(green)
                     }
                     Spacer()
-                    runTimer(context.state)
-                        .font(.title2.bold())
+
+                    Button(intent: ToggleRunSpeechIntent()) {
+                        Image(systemName: context.state.speechEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill")
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(context.state.speechEnabled ? green : Color.secondary)
+                            .frame(width: 36, height: 36)
+                            .background(Color.white.opacity(0.08))
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
                 }
+
+                runTimer(context.state)
+                    .font(.system(size: 38, weight: .bold, design: .rounded))
+                    .frame(maxWidth: .infinity)
 
                 HStack(spacing: 10) {
                     runMetric(
@@ -233,22 +245,45 @@ struct LockedInRunLiveActivity: Widget {
                     )
                 }
 
-                Button(intent: ToggleRunPauseIntent()) {
-                    Label(
-                        context.state.isPaused ? "Lauf fortsetzen" : "Lauf pausieren",
-                        systemImage: context.state.isPaused ? "play.fill" : "pause.fill"
-                    )
-                    .font(.headline.weight(.semibold))
-                    .foregroundStyle(context.state.isPaused ? .black : .white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 44)
-                    .background(context.state.isPaused ? green : Color.white.opacity(0.10))
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                if context.state.isPaused {
+                    HStack(spacing: 10) {
+                        Button(intent: ToggleRunPauseIntent()) {
+                            Label("Fortsetzen", systemImage: "play.fill")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.black)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 44)
+                                .background(green)
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+
+                        Button(intent: FinishRunIntent()) {
+                            Label("Lauf beenden", systemImage: "stop.fill")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 44)
+                                .background(Color.red.opacity(0.72))
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                } else {
+                    Button(intent: ToggleRunPauseIntent()) {
+                        Label("Lauf pausieren", systemImage: "pause.fill")
+                            .font(.headline.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 44)
+                            .background(Color.white.opacity(0.10))
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 16)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
             .activityBackgroundTint(Color.black.opacity(0.30))
             .activitySystemActionForegroundColor(.white)
         } dynamicIsland: { context in

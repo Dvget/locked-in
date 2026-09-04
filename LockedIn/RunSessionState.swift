@@ -10,6 +10,22 @@ enum RunSessionPhase: String, Codable, Equatable {
     case discarded
 }
 
+enum RunCountdownOption: Int, CaseIterable, Codable, Equatable, Identifiable {
+    case disabled = 0
+    case threeSeconds = 3
+    case fiveSeconds = 5
+    case tenSeconds = 10
+
+    static let defaultOption: RunCountdownOption = .threeSeconds
+
+    var id: Int { rawValue }
+    var seconds: Int { rawValue }
+
+    var displayName: String {
+        seconds == 0 ? "Ohne" : "\(seconds) Sekunden"
+    }
+}
+
 struct RunSessionClock: Codable, Equatable {
     private(set) var phase: RunSessionPhase = .preparing
     private(set) var startedAt: Date?
@@ -20,6 +36,12 @@ struct RunSessionClock: Codable, Equatable {
     mutating func beginCountdown() -> Bool {
         guard phase == .preparing else { return false }
         phase = .countdown
+        return true
+    }
+
+    mutating func cancelCountdown() -> Bool {
+        guard phase == .countdown else { return false }
+        phase = .preparing
         return true
     }
 

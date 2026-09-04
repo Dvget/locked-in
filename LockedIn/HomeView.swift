@@ -236,7 +236,12 @@ struct HomeView: View {
             }
             .onAppear {
                 guard availableRun == nil, resumedRun == nil else { return }
-                availableRun = RunTrackingEngine.restoreIfAvailable()
+                let restoredRun = RunTrackingEngine.restoreIfAvailable()
+                restoredRun?.prepare()
+                availableRun = restoredRun
+                if restoredRun?.phase == .finishing {
+                    resumedRun = restoredRun
+                }
             }
         }
     }

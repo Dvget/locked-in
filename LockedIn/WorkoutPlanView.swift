@@ -47,9 +47,7 @@ struct WorkoutPlanView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Schließen") {
-                        if let onClose { onClose() } else { dismiss() }
-                    }
+                    Button("Schließen", action: close)
                 }
             }
             .fullScreenCover(item: $activeWorkout) { workoutState in
@@ -59,6 +57,7 @@ struct WorkoutPlanView: View {
                 }
             }
         }
+        .lockedSwipeBack(action: close)
     }
 
     private var bodyWeightForNewWorkout: Double {
@@ -92,6 +91,10 @@ struct WorkoutPlanView: View {
         )
         WorkoutSessionStore.save(state)
         activeWorkout = state
+    }
+
+    private func close() {
+        if let onClose { onClose() } else { dismiss() }
     }
 }
 

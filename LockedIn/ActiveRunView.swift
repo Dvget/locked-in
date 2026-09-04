@@ -14,114 +14,19 @@ struct ActiveRunView: View {
     @State private var pendingRecord: RunRecord?
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-
-            VStack(spacing: 4) {
-                Text(engine.phase == .paused ? "PAUSIERT" : "LAUFZEIT")
-                    .font(.caption2.weight(.bold))
-                    .tracking(1.8)
-                    .foregroundStyle(engine.phase == .paused ? Color.yellow : Color.secondary)
-                Text(formatDuration(engine.activeDurationSeconds))
-                    .font(.system(size: 62, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(engine.phase == .paused ? Color.yellow : Color.white)
-                    .minimumScaleFactor(0.75)
-            }
-            .padding(.top, 26)
-
-            VStack(spacing: 12) {
-                HStack(spacing: 12) {
-                    metricCard(
-                        title: "DISTANZ",
-                        value: String(format: "%.2f", engine.metrics.distanceMeters / 1_000),
-                        unit: "km",
-                        accent: true
-                    )
-                    metricCard(
-                        title: "AKTUELLE PACE",
-                        value: formatPace(engine.currentPaceSecondsPerKm),
-                        unit: "min/km",
-                        accent: false
-                    )
-                }
-
-                HStack(spacing: 12) {
-                    metricCard(
-                        title: "Ø PACE",
-                        value: formatPace(engine.averagePaceSecondsPerKm),
-                        unit: "min/km",
-                        accent: false
-                    )
-                    metricCard(
-                        title: "HÖHENMETER",
-                        value: String(format: "%.0f", engine.metrics.elevationGainMeters),
-                        unit: "m aufwärts",
-                        accent: false
-                    )
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 28)
-
-            HStack(spacing: 7) {
-                Circle()
-                    .fill(engine.gpsReady ? Color.lockedGreen : Color.yellow)
-                    .frame(width: 7, height: 7)
-                Text(engine.gpsReady ? "GPS-Aufzeichnung aktiv" : "GPS-Signal unterbrochen")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.top, 16)
-
-            Spacer(minLength: 20)
-
-            if engine.phase == .finishing {
-                Button(action: savePendingRun) {
-                    Label("Lauf erneut speichern", systemImage: "arrow.clockwise")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 58)
-                }
-                .buttonStyle(LockedActionButtonStyle(prominent: true))
-                .padding(.horizontal, 16)
-                .padding(.bottom, 18)
+        Group {
+            if let pendingPayload {
+                RunCompletionSummaryView(
+                    payload: pendingPayload,
+                    onSave: savePendingRun,
+                    onDiscard: { showDiscardConfirmation = true }
+                )
+            } else if engine.phase == .finishing {
+                ProgressView("Lauf wird zusammengefasst …")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.black)
             } else {
-                HStack(spacing: 12) {
-                    Button {
-                        if engine.phase == .paused {
-                            _ = engine.resume()
-                        } else {
-                            _ = engine.pause()
-                        }
-                    } label: {
-                        Label(
-                            engine.phase == .paused ? "Fortsetzen" : "Pause",
-                            systemImage: engine.phase == .paused ? "play.fill" : "pause.fill"
-                        )
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 58)
-                    }
-                    .buttonStyle(LockedActionButtonStyle(prominent: engine.phase == .paused))
-                    .accessibilityIdentifier("run-pause")
-
-                    Button {
-                        showStopConfirmation = true
-                    } label: {
-                        Label("Stop", systemImage: "stop.fill")
-                            .font(.headline)
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 58)
-                            .background(Color.red.opacity(0.72))
-                            .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("run-stop")
-                }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 18)
+                activeRunContent
             }
         }
         .background(
@@ -137,13 +42,10 @@ struct ActiveRunView: View {
             isPresented: $showStopConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Beenden und speichern") { stopAndSave() }
+            Button("Lauf beenden", role: .destructive) { stopRun() }
             Button("Weiterlaufen", role: .cancel) {}
-            Button("Lauf verwerfen", role: .destructive) {
-                showDiscardConfirmation = true
-            }
         } message: {
-            Text("Der Lauf wird mit allen GPS- und Diagnosedaten gespeichert.")
+            Text("Die Aufzeichnung wird gestoppt. Anschließend kannst du den Lauf prüfen, speichern oder verwerfen.")
         }
         .alert("Lauf wirklich verwerfen?", isPresented: $showDiscardConfirmation) {
             Button("Abbrechen", role: .cancel) {}
@@ -166,14 +68,90 @@ struct ActiveRunView: View {
         } message: {
             Text(saveError ?? "Unbekannter Fehler")
         }
-        .onAppear {
-            guard engine.phase == .finishing, pendingPayload == nil else { return }
-            do {
-                pendingPayload = try engine.recoverFinishedPayload()
-                savePendingRun()
-            } catch {
-                saveError = error.localizedDescription
+        .onAppear(perform: recoverSummaryIfNeeded)
+        .onChange(of: engine.phase) { _, phase in
+            guard phase == .finishing else { return }
+            recoverSummaryIfNeeded()
+        }
+    }
+
+    private var activeRunContent: some View {
+        VStack(spacing: 0) {
+            header
+
+            VStack(spacing: 3) {
+                Text(engine.phase == .paused ? "PAUSIERT" : "LAUFZEIT")
+                    .font(.caption2.weight(.bold))
+                    .tracking(1.8)
+                    .foregroundStyle(engine.phase == .paused ? Color.yellow : Color.secondary)
+                Text(formatDuration(engine.activeDurationSeconds))
+                    .font(.system(size: 64, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(engine.phase == .paused ? Color.yellow : Color.white)
+                    .minimumScaleFactor(0.72)
+                    .lineLimit(1)
             }
+            .padding(.top, 16)
+
+            Spacer(minLength: 12)
+
+            largeMetric(
+                title: "DURCHSCHNITTLICHE PACE",
+                value: formatPace(engine.averagePaceSecondsPerKm),
+                unit: "min/km",
+                accent: false
+            )
+
+            Spacer(minLength: 12)
+
+            largeMetric(
+                title: "DISTANZ",
+                value: formatDistance(engine.metrics.distanceMeters / 1_000),
+                unit: "km",
+                accent: true
+            )
+
+            Spacer(minLength: 14)
+
+            splitStrip
+
+            Spacer(minLength: 14)
+
+            HStack(spacing: 12) {
+                Button {
+                    if engine.phase == .paused {
+                        _ = engine.resume()
+                    } else {
+                        _ = engine.pause()
+                    }
+                } label: {
+                    Label(
+                        engine.phase == .paused ? "Fortsetzen" : "Pause",
+                        systemImage: engine.phase == .paused ? "play.fill" : "pause.fill"
+                    )
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 58)
+                }
+                .buttonStyle(LockedActionButtonStyle(prominent: engine.phase == .paused))
+                .accessibilityIdentifier("run-pause")
+
+                Button {
+                    showStopConfirmation = true
+                } label: {
+                    Label("Lauf beenden", systemImage: "stop.fill")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 58)
+                        .background(Color.red.opacity(0.72))
+                        .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("run-stop")
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 18)
         }
     }
 
@@ -204,43 +182,91 @@ struct ActiveRunView: View {
         .padding(.top, 10)
     }
 
-    private func metricCard(
+    private func largeMetric(
         title: String,
         value: String,
         unit: String,
         accent: Bool
     ) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text(title)
-                .font(.caption2.weight(.bold))
-                .tracking(1.1)
-                .foregroundStyle(.secondary)
+        VStack(spacing: 3) {
             Text(value)
-                .font(.system(size: 34, weight: .bold, design: .rounded))
+                .font(.system(size: 70, weight: .bold, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(accent ? Color.lockedGreen : Color.white)
                 .minimumScaleFactor(0.7)
                 .lineLimit(1)
-            Text(unit)
-                .font(.caption)
+            Text("\(title) (\(unit))")
+                .font(.subheadline.weight(.bold))
                 .foregroundStyle(.secondary)
         }
-        .frame(maxWidth: .infinity, minHeight: 112, alignment: .leading)
-        .padding(15)
-        .background(Color.lockedCard)
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(accent ? Color.lockedGreen.opacity(0.24) : Color.lockedBorder, lineWidth: 1)
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var splitStrip: some View {
+        VStack(spacing: 8) {
+            Text("ZWISCHENZEITEN (KM)")
+                .font(.caption2.weight(.bold))
+                .tracking(1.4)
+                .foregroundStyle(.secondary)
+
+            GeometryReader { proxy in
+                let width = max(96, (proxy.size.width - 20) / 3)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: 10) {
+                        if engine.metrics.splits.isEmpty {
+                            ForEach(1...3, id: \.self) { kilometre in
+                                splitTile(kilometre: kilometre, pace: nil)
+                                    .frame(width: width)
+                            }
+                        } else {
+                            ForEach(engine.metrics.splits) { split in
+                                splitTile(kilometre: split.kilometre, pace: split.paceSecondsPerKm)
+                                    .frame(width: width)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                }
+            }
+            .frame(height: 76)
         }
     }
 
-    private func stopAndSave() {
+    private func splitTile(kilometre: Int, pace: Double?) -> some View {
+        VStack(spacing: 3) {
+            Text("KM \(kilometre)")
+                .font(.caption2.weight(.bold))
+                .tracking(0.8)
+                .foregroundStyle(.secondary)
+            Text(formatPace(pace))
+                .font(.title3.bold().monospacedDigit())
+                .foregroundStyle(pace == nil ? Color.secondary : Color.white)
+            Text("min/km")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.lockedCard)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.lockedBorder, lineWidth: 1)
+        }
+    }
+
+    private func stopRun() {
         do {
-            if pendingPayload == nil {
-                pendingPayload = try engine.finish()
-            }
-            savePendingRun()
+            pendingPayload = try engine.finish()
+        } catch {
+            saveError = error.localizedDescription
+        }
+    }
+
+    private func recoverSummaryIfNeeded() {
+        guard engine.phase == .finishing, pendingPayload == nil else { return }
+        do {
+            pendingPayload = try engine.recoverFinishedPayload()
         } catch {
             saveError = error.localizedDescription
         }
@@ -305,6 +331,10 @@ struct ActiveRunView: View {
         return String(format: "%d:%02d", total / 60, total % 60)
     }
 
+    private func formatDistance(_ kilometres: Double) -> String {
+        kilometres.formatted(.number.precision(.fractionLength(2)))
+    }
+
     private func formatDuration(_ seconds: TimeInterval) -> String {
         let value = max(0, Int(seconds))
         let hours = value / 3_600
@@ -313,5 +343,140 @@ struct ActiveRunView: View {
         return hours > 0
             ? String(format: "%d:%02d:%02d", hours, minutes, remainder)
             : String(format: "%02d:%02d", minutes, remainder)
+    }
+}
+
+private struct RunCompletionSummaryView: View {
+    let payload: RunFinishedPayload
+    let onSave: () -> Void
+    let onDiscard: () -> Void
+
+    private let columns = [
+        GridItem(.flexible(), spacing: 12),
+        GridItem(.flexible(), spacing: 12)
+    ]
+
+    var body: some View {
+        VStack(spacing: 0) {
+            BrandHeader()
+                .padding(.top, 12)
+
+            Spacer(minLength: 20)
+
+            Image(systemName: "checkmark")
+                .font(.system(size: 38, weight: .bold))
+                .foregroundStyle(.black)
+                .frame(width: 82, height: 82)
+                .background(Color.lockedGreen)
+                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+
+            Text("Lauf abgeschlossen")
+                .font(.system(size: 32, weight: .bold, design: .rounded))
+                .padding(.top, 18)
+
+            LazyVGrid(columns: columns, spacing: 12) {
+                summaryMetric(
+                    title: "DISTANZ",
+                    value: (payload.metrics.distanceMeters / 1_000).formatted(.number.precision(.fractionLength(2))),
+                    unit: "km",
+                    accent: true
+                )
+                summaryMetric(
+                    title: "Ø PACE",
+                    value: pace,
+                    unit: "min/km",
+                    accent: false
+                )
+                summaryMetric(
+                    title: "LAUFZEIT",
+                    value: duration,
+                    unit: "aktiv",
+                    accent: false
+                )
+                summaryMetric(
+                    title: "HÖHENMETER",
+                    value: "+\(Int(payload.metrics.elevationGainMeters.rounded())) / −\(Int(payload.metrics.elevationLossMeters.rounded()))",
+                    unit: "m",
+                    accent: false
+                )
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 26)
+
+            Spacer(minLength: 20)
+
+            VStack(spacing: 12) {
+                Button(action: onSave) {
+                    Label("Lauf speichern", systemImage: "checkmark.circle.fill")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 58)
+                }
+                .buttonStyle(LockedActionButtonStyle(prominent: true))
+
+                Button(action: onDiscard) {
+                    Label("Lauf verwerfen", systemImage: "trash")
+                        .font(.headline)
+                        .foregroundStyle(.red)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 54)
+                        .background(Color.white.opacity(0.06))
+                        .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 18)
+            .padding(.bottom, 18)
+        }
+        .background(Color.black.ignoresSafeArea())
+    }
+
+    private func summaryMetric(
+        title: String,
+        value: String,
+        unit: String,
+        accent: Bool
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title)
+                .font(.caption2.weight(.bold))
+                .tracking(1.1)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.system(size: 27, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(accent ? Color.lockedGreen : Color.white)
+                .minimumScaleFactor(0.65)
+                .lineLimit(1)
+            Text(unit)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, minHeight: 96, alignment: .leading)
+        .padding(14)
+        .background(Color.lockedCard)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(accent ? Color.lockedGreen.opacity(0.30) : Color.lockedBorder, lineWidth: 1)
+        }
+    }
+
+    private var pace: String {
+        guard payload.metrics.distanceMeters > 0 else { return "–:––" }
+        let seconds = payload.activeDurationSeconds / (payload.metrics.distanceMeters / 1_000)
+        guard seconds.isFinite, seconds > 0 else { return "–:––" }
+        let total = Int(seconds.rounded())
+        return String(format: "%d:%02d", total / 60, total % 60)
+    }
+
+    private var duration: String {
+        let value = max(0, Int(payload.activeDurationSeconds))
+        let hours = value / 3_600
+        let minutes = (value % 3_600) / 60
+        let seconds = value % 60
+        return hours > 0
+            ? String(format: "%d:%02d:%02d", hours, minutes, seconds)
+            : String(format: "%02d:%02d", minutes, seconds)
     }
 }

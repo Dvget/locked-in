@@ -6,22 +6,26 @@ struct TrainingModeSelectionView: View {
     @State private var activeMode: TrainingMode?
 
     var body: some View {
-        Group {
+        ZStack {
             switch activeMode {
             case .strength:
                 WorkoutPlanView(
-                    onClose: { activeMode = nil },
+                    onClose: { returnToSelection() },
                     onFlowFinished: { dismiss() }
                 )
+                .transition(.opacity)
             case .running:
                 RunPreparationView(
-                    onClose: { activeMode = nil },
+                    onClose: { returnToSelection() },
                     onFlowFinished: { dismiss() }
                 )
+                .transition(.opacity)
             case nil:
                 selectionContent
+                    .transition(.opacity)
             }
         }
+        .animation(.easeInOut(duration: 0.28), value: activeMode)
         .preferredColorScheme(.dark)
     }
 
@@ -48,40 +52,33 @@ struct TrainingModeSelectionView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 18)
-            .padding(.top, 34)
-            .padding(.bottom, 22)
+            .padding(.top, 28)
+            .padding(.bottom, 18)
 
             VStack(spacing: 14) {
                 modeCard(
                     mode: .strength,
                     icon: "dumbbell.fill",
-                    title: "Krafttraining",
-                    subtitle: "Übungen auswählen und Session starten",
-                    detail: "SÄTZE  ·  REPS  ·  GEWICHT"
+                    title: "Krafttraining"
                 )
                 .accessibilityIdentifier("training-mode-strength")
 
                 modeCard(
                     mode: .running,
                     icon: "figure.run",
-                    title: "Running",
-                    subtitle: "Lauf mit dem iPhone aufzeichnen",
-                    detail: "GPS  ·  PACE  ·  HÖHENMETER"
+                    title: "Running"
                 )
                 .accessibilityIdentifier("training-mode-running")
             }
             .padding(.horizontal, 18)
-
-            Spacer(minLength: 18)
+            .frame(maxHeight: .infinity)
 
             Button {
-                withAnimation(.easeInOut(duration: 0.22)) {
-                    activeMode = selectedMode
-                }
+                activeMode = selectedMode
             } label: {
                 HStack {
                     Image(systemName: selectedMode == .strength ? "dumbbell.fill" : "figure.run")
-                    Text(selectedMode == .strength ? "Krafttraining auswählen" : "Running auswählen")
+                    Text(selectedMode == .strength ? "Training auswählen" : "Lauf starten")
                     Spacer()
                     Image(systemName: "arrow.right")
                 }
@@ -102,14 +99,13 @@ struct TrainingModeSelectionView: View {
             )
             .ignoresSafeArea()
         )
+        .lockedSwipeBack(action: { dismiss() })
     }
 
     private func modeCard(
         mode: TrainingMode,
         icon: String,
-        title: String,
-        subtitle: String,
-        detail: String
+        title: String
     ) -> some View {
         let selected = selectedMode == mode
         return Button {
@@ -117,46 +113,46 @@ struct TrainingModeSelectionView: View {
                 selectedMode = mode
             }
         } label: {
-            VStack(alignment: .leading, spacing: 22) {
-                HStack(alignment: .top) {
-                    Image(systemName: icon)
-                        .font(.system(size: 28, weight: .semibold))
-                        .foregroundStyle(selected ? Color.black : Color.lockedGreen)
-                        .frame(width: 58, height: 58)
-                        .background(selected ? Color.lockedGreen : Color.lockedGreen.opacity(0.12))
-                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            VStack(spacing: 20) {
+                Spacer(minLength: 8)
 
-                    Spacer()
+                Image(systemName: icon)
+                    .font(.system(size: 48, weight: .semibold))
+                    .foregroundStyle(selected ? Color.black : Color.lockedGreen)
+                    .frame(width: 92, height: 92)
+                    .background(selected ? Color.lockedGreen : Color.lockedGreen.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
 
-                    Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                        .font(.title2)
-                        .foregroundStyle(selected ? Color.lockedGreen : Color.secondary)
-                }
+                Text(title)
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
 
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(title)
-                        .font(.title2.bold())
-                        .foregroundStyle(.white)
-                    Text(subtitle)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-
-                Text(detail)
-                    .font(.caption2.weight(.bold))
-                    .tracking(1.3)
-                    .foregroundStyle(selected ? Color.lockedGreen : Color.secondary)
+                Spacer(minLength: 8)
             }
-            .padding(18)
-            .frame(maxWidth: .infinity, minHeight: 190, alignment: .leading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(selected ? Color.lockedGreen.opacity(0.10) : Color.lockedCard)
-            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .overlay(alignment: .topTrailing) {
+                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                    .font(.title2)
+                    .foregroundStyle(selected ? Color.lockedGreen : Color.secondary)
+                    .padding(20)
+            }
             .overlay {
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .stroke(selected ? Color.lockedGreen.opacity(0.75) : Color.lockedBorder, lineWidth: selected ? 1.5 : 1)
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .stroke(
+                        selected ? Color.lockedGreen.opacity(0.75) : Color.lockedBorder,
+                        lineWidth: selected ? 1.5 : 1
+                    )
             }
         }
         .buttonStyle(.plain)
+    }
+
+    private func returnToSelection() {
+        withAnimation(.easeInOut(duration: 0.28)) {
+            activeMode = nil
+        }
     }
 }
 

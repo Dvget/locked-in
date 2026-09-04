@@ -23,9 +23,36 @@ private struct LockedSwipeBackModifier: ViewModifier {
     }
 }
 
+private struct LockedSwipeBackActionModifier: ViewModifier {
+    let action: () -> Void
+
+    func body(content: Content) -> some View {
+        content.simultaneousGesture(
+            DragGesture(minimumDistance: 18, coordinateSpace: .local)
+                .onEnded { value in
+                    let dx = value.translation.width
+                    let dy = value.translation.height
+                    let predicted = value.predictedEndTranslation.width
+
+                    guard dx > 80,
+                          predicted > 120,
+                          abs(dy) < 90,
+                          dx > abs(dy) * 1.35 else { return }
+
+                    action()
+                },
+            including: .gesture
+        )
+    }
+}
+
 extension View {
     func lockedSwipeBack() -> some View {
         modifier(LockedSwipeBackModifier())
+    }
+
+    func lockedSwipeBack(action: @escaping () -> Void) -> some View {
+        modifier(LockedSwipeBackActionModifier(action: action))
     }
 }
 

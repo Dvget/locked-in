@@ -105,7 +105,11 @@ final class RunTrackingEngine: NSObject, ObservableObject, Identifiable {
             locationManager.startUpdatingLocation()
         }
         if [.recording, .paused].contains(phase), let startedAt = clock.startedAt {
-            RunLiveActivityManager.start(runID: runID, startedAt: startedAt)
+            RunLiveActivityManager.start(
+                runID: runID,
+                startedAt: startedAt,
+                speechEnabled: speechEnabled
+            )
             consumeLiveActivityControl(at: Date())
             updateLiveActivity(force: true)
         }
@@ -120,13 +124,22 @@ final class RunTrackingEngine: NSObject, ObservableObject, Identifiable {
         return true
     }
 
+    func cancelCountdown() {
+        guard clock.cancelCountdown() else { return }
+        phase = clock.phase
+    }
+
     func start(at date: Date = Date()) -> Bool {
         guard clock.start(at: date) else { return false }
         phase = clock.phase
         activeDurationSeconds = 0
         locationManager.startUpdatingLocation()
         startTimerIfNeeded()
-        RunLiveActivityManager.start(runID: runID, startedAt: date)
+        RunLiveActivityManager.start(
+            runID: runID,
+            startedAt: date,
+            speechEnabled: speechEnabled
+        )
         updateLiveActivity(force: true)
         checkpoint(force: true)
         return true
@@ -252,8 +265,21 @@ final class RunTrackingEngine: NSObject, ObservableObject, Identifiable {
     }
 
     private func consumeLiveActivityControl(at date: Date) {
-        guard let request = RunLiveActivityManager.consumePauseRequest(runID: runID) else { return }
+        guard let request = RunLiveActivityManager.consumeControlRequest(runID: runID) else { return }
         let requestDate = min(date, request.requestedAt)
+
+        if request.speechEnabled != speechEnabled {
+            speechEnabled = request.speechEnabled
+            if !speechEnabled {
+                audioCoach.stop()
+            }
+        }
+
+        if request.finishRequested, phase == .paused {
+            _ = try? finish(at: requestDate)
+            return
+        }
+
         if request.shouldPause, phase == .recording {
             _ = pause(at: requestDate)
         } else if !request.shouldPause, phase == .paused {
@@ -276,6 +302,7 @@ final class RunTrackingEngine: NSObject, ObservableObject, Identifiable {
             distanceMeters: metrics.distanceMeters,
             paceSecondsPerKm: currentPaceSecondsPerKm,
             isPaused: phase == .paused,
+            speechEnabled: speechEnabled,
             activeDurationSeconds: activeDurationSeconds,
             force: force
         )
