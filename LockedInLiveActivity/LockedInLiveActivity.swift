@@ -200,63 +200,64 @@ struct LockedInRunLiveActivity: Widget {
 
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: LockedInRunActivityAttributes.self) { context in
-            VStack(spacing: 5) {
-                HStack(spacing: 8) {
+            VStack(spacing: 4) {
+                ZStack {
                     HStack(spacing: 6) {
-                        Image("LogoMark")
-                            .resizable()
-                            .renderingMode(.original)
-                            .scaledToFit()
-                            .frame(width: 21, height: 21)
-                        Text("RUNNING")
-                            .font(.caption2.weight(.bold))
-                            .tracking(1.2)
-                            .foregroundStyle(green)
-                    }
+                        HStack(spacing: 6) {
+                            Image("LogoMark")
+                                .resizable()
+                                .renderingMode(.original)
+                                .scaledToFit()
+                                .frame(width: 21, height: 21)
+                            Text("RUNNING")
+                                .font(.caption2.weight(.bold))
+                                .tracking(1.2)
+                                .foregroundStyle(green)
+                        }
 
-                    Spacer(minLength: 4)
+                        Spacer(minLength: 4)
+
+                        Button(intent: ToggleRunSpeechIntent()) {
+                            Image(systemName: context.state.speechEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill")
+                                .font(.caption2.weight(.bold))
+                                .foregroundStyle(context.state.speechEnabled ? green : Color.secondary)
+                                .frame(width: 28, height: 28)
+                                .background(Color.white.opacity(0.08))
+                                .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                    }
 
                     runTimer(context.state)
-                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                        .font(.system(size: 26, weight: .bold, design: .rounded))
                         .minimumScaleFactor(0.72)
                         .lineLimit(1)
-
-                    Spacer(minLength: 4)
-
-                    Button(intent: ToggleRunSpeechIntent()) {
-                        Image(systemName: context.state.speechEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill")
-                            .font(.caption2.weight(.bold))
-                            .foregroundStyle(context.state.speechEnabled ? green : Color.secondary)
-                            .frame(width: 28, height: 28)
-                            .background(Color.white.opacity(0.08))
-                            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
+                        .frame(maxWidth: .infinity, alignment: .center)
                 }
-
-                HStack(spacing: 7) {
-                    runMetric(
-                        title: "DISTANZ",
-                        value: String(format: "%.2f", context.state.distanceMeters / 1_000),
-                        unit: "km",
-                        accent: false
-                    )
-                    runMetric(
-                        title: "PACE",
-                        value: pace(context.state.paceSecondsPerKm),
-                        unit: "/km",
-                        accent: false
-                    )
-                }
+                .frame(height: 28)
 
                 if context.state.isPaused {
                     HStack(spacing: 7) {
+                        runMetric(
+                            value: String(format: "%.2f", context.state.distanceMeters / 1_000),
+                            unit: "km",
+                            compact: true
+                        )
+                        runMetric(
+                            value: pace(context.state.paceSecondsPerKm),
+                            unit: "/km",
+                            compact: true
+                        )
+                    }
+                    .frame(height: 40)
+
+                    HStack(spacing: 7) {
                         Button(intent: ToggleRunPauseIntent()) {
                             Label("Fortsetzen", systemImage: "play.fill")
-                                .font(.caption.weight(.semibold))
+                                .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(.black)
                                 .frame(maxWidth: .infinity)
-                                .frame(height: 32)
+                                .frame(height: 40)
                                 .background(green)
                                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                         }
@@ -264,30 +265,46 @@ struct LockedInRunLiveActivity: Widget {
 
                         Button(intent: FinishRunIntent()) {
                             Text("Lauf beenden")
-                                .font(.caption.weight(.semibold))
+                                .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(.white)
                                 .frame(maxWidth: .infinity)
-                                .frame(height: 32)
-                                .background(Color.red.opacity(0.72))
+                                .frame(height: 40)
+                                .background(Color.red.opacity(0.78))
                                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                         }
                         .buttonStyle(.plain)
                     }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
                 } else {
-                    Button(intent: ToggleRunPauseIntent()) {
-                        Label("Lauf pausieren", systemImage: "pause.fill")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 32)
-                            .background(Color.white.opacity(0.10))
-                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    HStack(spacing: 7) {
+                        runMetric(
+                            value: String(format: "%.2f", context.state.distanceMeters / 1_000),
+                            unit: "km",
+                            compact: false
+                        )
+
+                        Button(intent: ToggleRunPauseIntent()) {
+                            Image(systemName: "pause.fill")
+                                .font(.title3.weight(.bold))
+                                .foregroundStyle(.white)
+                                .frame(width: 58, height: 84)
+                                .background(Color.white.opacity(0.10))
+                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+
+                        runMetric(
+                            value: pace(context.state.paceSecondsPerKm),
+                            unit: "/km",
+                            compact: false
+                        )
                     }
-                    .buttonStyle(.plain)
+                    .frame(height: 84)
                 }
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.vertical, 5)
+            .animation(.easeInOut(duration: 0.24), value: context.state.isPaused)
             .activityBackgroundTint(Color.black.opacity(0.30))
             .activitySystemActionForegroundColor(.white)
         } dynamicIsland: { context in
@@ -352,25 +369,21 @@ struct LockedInRunLiveActivity: Widget {
         }
     }
 
-    private func runMetric(title: String, value: String, unit: String, accent: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .font(.caption2.weight(.bold))
-                .tracking(1.0)
+    private func runMetric(value: String, unit: String, compact: Bool) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Text(value)
+                .font(.system(size: compact ? 20 : 29, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+                .minimumScaleFactor(0.70)
+                .lineLimit(1)
+            Text(unit)
+                .font(compact ? .caption2.weight(.semibold) : .caption.weight(.semibold))
                 .foregroundStyle(.secondary)
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text(value)
-                    .font(.system(size: 21, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(accent ? green : .white)
-                Text(unit)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            }
+                .lineLimit(1)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 9)
-        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .padding(.horizontal, compact ? 5 : 7)
         .background(Color.white.opacity(0.06))
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
