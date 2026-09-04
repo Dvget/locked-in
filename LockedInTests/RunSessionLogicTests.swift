@@ -48,6 +48,19 @@ final class RunSessionLogicTests: XCTestCase {
         XCTAssertEqual(clock.activeDuration(at: date(200)), 75, accuracy: 0.001)
     }
 
+    func testFinishedRunCanContinueWithoutCountingSummaryTimeAsActive() {
+        var clock = RunSessionClock()
+        XCTAssertTrue(clock.start(at: date(0)))
+        XCTAssertTrue(clock.pause(at: date(60)))
+        XCTAssertTrue(clock.finish(at: date(70)))
+
+        XCTAssertTrue(clock.continueAfterFinish(at: date(100)))
+        XCTAssertEqual(clock.phase, .recording)
+        XCTAssertNil(clock.finishedAt)
+        XCTAssertEqual(clock.activeDuration(at: date(130)), 90, accuracy: 0.001)
+        XCTAssertEqual(clock.pausedDuration(at: date(130)), 40, accuracy: 0.001)
+    }
+
     func testFinishingCheckpointIsRestorableForSaveRetry() {
         var clock = RunSessionClock()
         XCTAssertTrue(clock.start(at: date(0)))
