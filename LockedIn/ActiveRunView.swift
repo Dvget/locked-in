@@ -219,9 +219,16 @@ struct ActiveRunView: View {
                 .foregroundStyle(.secondary)
 
             GeometryReader { proxy in
-                let width = max(96, (proxy.size.width - 20) / 3)
+                let horizontalPadding = 16.0
+                let spacing = 10.0
+                let width = CGFloat(RunSplitLayout.tileWidth(
+                    availableWidth: Double(proxy.size.width),
+                    horizontalPadding: horizontalPadding,
+                    spacing: spacing,
+                    visibleTileCount: 3
+                ))
                 ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: 10) {
+                    LazyHStack(spacing: spacing) {
                         if engine.metrics.splits.isEmpty {
                             ForEach(1...3, id: \.self) { kilometre in
                                 splitTile(kilometre: kilometre, pace: nil)
@@ -234,7 +241,7 @@ struct ActiveRunView: View {
                             }
                         }
                     }
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, horizontalPadding)
                 }
             }
             .frame(height: 76)
