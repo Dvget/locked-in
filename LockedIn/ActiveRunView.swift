@@ -151,10 +151,13 @@ struct ActiveRunView: View {
                     } label: {
                         Label("Lauf pausieren", systemImage: "pause.fill")
                             .font(.headline)
+                            .foregroundStyle(.black)
                             .frame(maxWidth: .infinity)
                             .frame(height: 58)
+                            .background(Color.yellow)
+                            .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
                     }
-                    .buttonStyle(LockedActionButtonStyle(prominent: false))
+                    .buttonStyle(.plain)
                     .accessibilityIdentifier("run-pause")
                 }
             }
@@ -409,8 +412,8 @@ private struct RunCompletionSummaryView: View {
                     accent: false
                 )
                 summaryMetric(
-                    title: "HÖHENMETER",
-                    value: "+\(Int(payload.metrics.elevationGainMeters.rounded())) / −\(Int(payload.metrics.elevationLossMeters.rounded()))",
+                    title: RunDisplayFormatting.elevationGainTitle,
+                    value: RunDisplayFormatting.elevationGainValue(meters: payload.metrics.elevationGainMeters),
                     unit: "m",
                     accent: false
                 )
