@@ -16,7 +16,8 @@ let package = Package(
                 "PolarRunPayload.swift",
                 "RunTrackingCore.swift",
                 "RunDiagnosticMetadata.swift",
-                "RunSessionState.swift"
+                "RunSessionState.swift",
+                "RunSplitLayout.swift"
             ]
         ),
         .testTarget(
