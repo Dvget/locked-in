@@ -26,6 +26,7 @@ final class RunTrackingEngine: NSObject, ObservableObject, Identifiable {
     @Published private(set) var gpsReady = false
     @Published private(set) var lastError: String?
     @Published private(set) var displayedCurrentPaceSecondsPerKm: Double?
+    @Published private(set) var finishConfirmationRequested = false
     @Published var speechEnabled: Bool {
         didSet {
             UserDefaults.standard.set(speechEnabled, forKey: Self.speechPreferenceKey)
@@ -178,6 +179,7 @@ final class RunTrackingEngine: NSObject, ObservableObject, Identifiable {
         guard clock.finish(at: date), clock.startedAt != nil else {
             throw RunTrackingError.invalidState
         }
+        finishConfirmationRequested = false
         phase = clock.phase
         updateClock(at: date)
         locationManager.stopUpdatingLocation()
@@ -189,6 +191,25 @@ final class RunTrackingEngine: NSObject, ObservableObject, Identifiable {
         let payload = try makeFinishedPayload(recordedAt: date)
         checkpoint(force: true)
         return payload
+    }
+
+    func continueAfterFinish(at date: Date = Date()) -> Bool {
+        guard clock.continueAfterFinish(at: date), let startedAt = clock.startedAt else { return false }
+        calculator.endPause()
+        metrics = calculator.currentSnapshot
+        phase = clock.phase
+        activeDurationSeconds = clock.activeDuration(at: date)
+        finishConfirmationRequested = false
+        locationManager.startUpdatingLocation()
+        startTimerIfNeeded()
+        RunLiveActivityManager.start(
+            runID: runID,
+            startedAt: startedAt,
+            speechEnabled: speechEnabled
+        )
+        updateLiveActivity(force: true)
+        checkpoint(force: true)
+        return true
     }
 
     func recoverFinishedPayload() throws -> RunFinishedPayload {
@@ -227,6 +248,7 @@ final class RunTrackingEngine: NSObject, ObservableObject, Identifiable {
     func markSaved() {
         _ = clock.markSaved()
         phase = clock.phase
+        finishConfirmationRequested = false
         locationManager.stopUpdatingLocation()
         timerTask?.cancel()
         timerTask = nil
@@ -236,12 +258,17 @@ final class RunTrackingEngine: NSObject, ObservableObject, Identifiable {
     func discard() {
         _ = clock.discard()
         phase = clock.phase
+        finishConfirmationRequested = false
         locationManager.stopUpdatingLocation()
         timerTask?.cancel()
         timerTask = nil
         audioCoach.stop()
         RunLiveActivityManager.end(runID: runID)
         RunSessionStore.clear()
+    }
+
+    func clearFinishConfirmationRequest() {
+        finishConfirmationRequested = false
     }
 
     func toggleSpeech() {
@@ -283,7 +310,9 @@ final class RunTrackingEngine: NSObject, ObservableObject, Identifiable {
         }
 
         if request.finishRequested, phase == .paused {
-            _ = try? finish(at: requestDate)
+            finishConfirmationRequested = true
+            updateLiveActivity(force: true)
+            checkpoint(force: true)
             return
         }
 
