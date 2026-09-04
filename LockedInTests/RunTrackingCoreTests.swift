@@ -26,6 +26,23 @@ final class RunTrackingCoreTests: XCTestCase {
         )
     }
 
+    func testDisplayedPaceUpdatesAtMostEveryTwentySeconds() {
+        var throttle = RunPaceDisplayThrottle(interval: 20)
+
+        XCTAssertEqual(throttle.ingest(360, at: date(0)), 360)
+        XCTAssertEqual(throttle.ingest(420, at: date(10)), 360)
+        XCTAssertEqual(throttle.ingest(390, at: date(19.9)), 360)
+        XCTAssertEqual(throttle.ingest(400, at: date(20)), 400)
+    }
+
+    func testDisplayedPaceKeepsLastValueWhenCandidateIsMissing() {
+        var throttle = RunPaceDisplayThrottle(interval: 20)
+
+        XCTAssertEqual(throttle.ingest(360, at: date(0)), 360)
+        XCTAssertEqual(throttle.ingest(nil, at: date(25)), 360)
+        XCTAssertEqual(throttle.ingest(420, at: date(26)), 420)
+    }
+
     func testFilterRejectsStaleFutureAndInaccurateSamples() {
         let filter = RunLocationFilter(configuration: .version1)
 

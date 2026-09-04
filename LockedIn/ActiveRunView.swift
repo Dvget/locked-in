@@ -108,7 +108,7 @@ struct ActiveRunView: View {
                 title: "DISTANZ",
                 value: formatDistance(engine.metrics.distanceMeters / 1_000),
                 unit: "km",
-                accent: true
+                accent: false
             )
 
             Spacer(minLength: 14)
@@ -117,38 +117,44 @@ struct ActiveRunView: View {
 
             Spacer(minLength: 14)
 
-            HStack(spacing: 12) {
-                Button {
-                    if engine.phase == .paused {
+            if engine.phase == .paused {
+                HStack(spacing: 12) {
+                    Button {
                         _ = engine.resume()
-                    } else {
-                        _ = engine.pause()
+                    } label: {
+                        Label("Fortsetzen", systemImage: "play.fill")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 58)
                     }
-                } label: {
-                    Label(
-                        engine.phase == .paused ? "Fortsetzen" : "Pause",
-                        systemImage: engine.phase == .paused ? "play.fill" : "pause.fill"
-                    )
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 58)
-                }
-                .buttonStyle(LockedActionButtonStyle(prominent: engine.phase == .paused))
-                .accessibilityIdentifier("run-pause")
+                    .buttonStyle(LockedActionButtonStyle(prominent: true))
+                    .accessibilityIdentifier("run-pause")
 
+                    Button {
+                        showStopConfirmation = true
+                    } label: {
+                        Label("Lauf beenden", systemImage: "stop.fill")
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 58)
+                            .background(Color.red.opacity(0.72))
+                            .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("run-stop")
+                }
+            } else {
                 Button {
-                    showStopConfirmation = true
+                    _ = engine.pause()
                 } label: {
-                    Label("Lauf beenden", systemImage: "stop.fill")
+                    Label("Lauf pausieren", systemImage: "pause.fill")
                         .font(.headline)
-                        .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                         .frame(height: 58)
-                        .background(Color.red.opacity(0.72))
-                        .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
                 }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("run-stop")
+                .buttonStyle(LockedActionButtonStyle(prominent: false))
+                .accessibilityIdentifier("run-pause")
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 18)

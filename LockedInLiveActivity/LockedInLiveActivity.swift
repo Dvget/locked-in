@@ -200,7 +200,7 @@ struct LockedInRunLiveActivity: Widget {
 
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: LockedInRunActivityAttributes.self) { context in
-            VStack(spacing: 11) {
+            VStack(spacing: 7) {
                 HStack {
                     HStack(spacing: 8) {
                         Image("LogoMark")
@@ -217,9 +217,9 @@ struct LockedInRunLiveActivity: Widget {
 
                     Button(intent: ToggleRunSpeechIntent()) {
                         Image(systemName: context.state.speechEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill")
-                            .font(.subheadline.weight(.bold))
+                            .font(.caption.weight(.bold))
                             .foregroundStyle(context.state.speechEnabled ? green : Color.secondary)
-                            .frame(width: 36, height: 36)
+                            .frame(width: 30, height: 30)
                             .background(Color.white.opacity(0.08))
                             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                     }
@@ -227,15 +227,15 @@ struct LockedInRunLiveActivity: Widget {
                 }
 
                 runTimer(context.state)
-                    .font(.system(size: 38, weight: .bold, design: .rounded))
+                    .font(.system(size: 31, weight: .bold, design: .rounded))
                     .frame(maxWidth: .infinity)
 
-                HStack(spacing: 10) {
+                HStack(spacing: 8) {
                     runMetric(
                         title: "DISTANZ",
                         value: String(format: "%.2f", context.state.distanceMeters / 1_000),
                         unit: "km",
-                        accent: true
+                        accent: false
                     )
                     runMetric(
                         title: "PACE",
@@ -246,24 +246,24 @@ struct LockedInRunLiveActivity: Widget {
                 }
 
                 if context.state.isPaused {
-                    HStack(spacing: 10) {
+                    HStack(spacing: 8) {
                         Button(intent: ToggleRunPauseIntent()) {
                             Label("Fortsetzen", systemImage: "play.fill")
-                                .font(.subheadline.weight(.semibold))
+                                .font(.caption.weight(.semibold))
                                 .foregroundStyle(.black)
                                 .frame(maxWidth: .infinity)
-                                .frame(height: 44)
+                                .frame(height: 36)
                                 .background(green)
                                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
                         .buttonStyle(.plain)
 
                         Button(intent: FinishRunIntent()) {
-                            Label("Lauf beenden", systemImage: "stop.fill")
-                                .font(.subheadline.weight(.semibold))
+                            Text("Lauf beenden")
+                                .font(.caption.weight(.semibold))
                                 .foregroundStyle(.white)
                                 .frame(maxWidth: .infinity)
-                                .frame(height: 44)
+                                .frame(height: 36)
                                 .background(Color.red.opacity(0.72))
                                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
@@ -272,18 +272,18 @@ struct LockedInRunLiveActivity: Widget {
                 } else {
                     Button(intent: ToggleRunPauseIntent()) {
                         Label("Lauf pausieren", systemImage: "pause.fill")
-                            .font(.headline.weight(.semibold))
+                            .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.white)
                             .frame(maxWidth: .infinity)
-                            .frame(height: 44)
+                            .frame(height: 36)
                             .background(Color.white.opacity(0.10))
                             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
             .activityBackgroundTint(Color.black.opacity(0.30))
             .activitySystemActionForegroundColor(.white)
         } dynamicIsland: { context in
@@ -317,7 +317,7 @@ struct LockedInRunLiveActivity: Widget {
                 DynamicIslandExpandedRegion(.bottom) {
                     Text(String(format: "%.2f km", context.state.distanceMeters / 1_000))
                         .font(.headline.weight(.semibold))
-                        .foregroundStyle(green)
+                        .foregroundStyle(.white)
                         .padding(.top, 4)
                 }
             } compactLeading: {
@@ -326,7 +326,7 @@ struct LockedInRunLiveActivity: Widget {
             } compactTrailing: {
                 Text(String(format: "%.2f", context.state.distanceMeters / 1_000))
                     .font(.caption.weight(.bold))
-                    .foregroundStyle(green)
+                    .foregroundStyle(.white)
             } minimal: {
                 Image(systemName: "figure.run")
                     .foregroundStyle(green)
@@ -356,7 +356,7 @@ struct LockedInRunLiveActivity: Widget {
                 .foregroundStyle(.secondary)
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text(value)
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .font(.system(size: 23, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(accent ? green : .white)
                 Text(unit)
@@ -365,7 +365,8 @@ struct LockedInRunLiveActivity: Widget {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
         .background(Color.white.opacity(0.06))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }

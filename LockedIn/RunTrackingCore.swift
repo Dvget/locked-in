@@ -103,6 +103,27 @@ struct RunPaceSegment: Codable, Equatable {
     let durationSeconds: TimeInterval
 }
 
+struct RunPaceDisplayThrottle {
+    let interval: TimeInterval
+    private(set) var value: Double?
+    private var lastUpdatedAt: Date?
+
+    init(interval: TimeInterval, initialValue: Double? = nil) {
+        self.interval = interval
+        self.value = initialValue
+    }
+
+    mutating func ingest(_ candidate: Double?, at date: Date) -> Double? {
+        guard let candidate, candidate.isFinite, candidate > 0 else { return value }
+        if let lastUpdatedAt, date.timeIntervalSince(lastUpdatedAt) < interval {
+            return value
+        }
+        value = candidate
+        lastUpdatedAt = date
+        return value
+    }
+}
+
 struct RunMetricsCalculatorState: Codable, Equatable {
     let route: [RunLocationDecision]
     let splits: [RunSplit]

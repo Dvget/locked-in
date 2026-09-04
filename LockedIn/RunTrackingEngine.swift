@@ -25,6 +25,7 @@ final class RunTrackingEngine: NSObject, ObservableObject, Identifiable {
     @Published private(set) var authorizationStatus: CLAuthorizationStatus
     @Published private(set) var gpsReady = false
     @Published private(set) var lastError: String?
+    @Published private(set) var displayedCurrentPaceSecondsPerKm: Double?
     @Published var speechEnabled: Bool {
         didSet {
             UserDefaults.standard.set(speechEnabled, forKey: Self.speechPreferenceKey)
@@ -50,6 +51,7 @@ final class RunTrackingEngine: NSObject, ObservableObject, Identifiable {
     private let audioCoach = RunAudioCoach()
     private var clock: RunSessionClock
     private var calculator: RunMetricsCalculator
+    private var paceDisplayThrottle: RunPaceDisplayThrottle
     private var timerTask: Task<Void, Never>?
     private var lastCheckpointAt = Date.distantPast
     private var lastUsableFixAt: Date?
@@ -70,6 +72,11 @@ final class RunTrackingEngine: NSObject, ObservableObject, Identifiable {
             self.calculator = RunMetricsCalculator(configuration: configuration)
         }
         self.metrics = checkpoint?.metrics ?? .empty
+        self.displayedCurrentPaceSecondsPerKm = checkpoint?.metrics.currentPaceSecondsPerKm
+        self.paceDisplayThrottle = RunPaceDisplayThrottle(
+            interval: 20,
+            initialValue: checkpoint?.metrics.currentPaceSecondsPerKm
+        )
         self.phase = checkpoint?.clock.phase ?? .preparing
         self.authorizationStatus = CLLocationManager().authorizationStatus
         self.speechEnabled = checkpoint?.speechEnabled
@@ -300,7 +307,7 @@ final class RunTrackingEngine: NSObject, ObservableObject, Identifiable {
         RunLiveActivityManager.update(
             runID: runID,
             distanceMeters: metrics.distanceMeters,
-            paceSecondsPerKm: currentPaceSecondsPerKm,
+            paceSecondsPerKm: displayedCurrentPaceSecondsPerKm,
             isPaused: phase == .paused,
             speechEnabled: speechEnabled,
             activeDurationSeconds: activeDurationSeconds,
@@ -390,6 +397,10 @@ extension RunTrackingEngine: CLLocationManagerDelegate {
                 sample,
                 receivedAt: receivedAt,
                 isPaused: phase == .paused
+            )
+            displayedCurrentPaceSecondsPerKm = paceDisplayThrottle.ingest(
+                metrics.currentPaceSecondsPerKm,
+                at: receivedAt
             )
 
             if speechEnabled, metrics.splits.count > previousSplitCount {
