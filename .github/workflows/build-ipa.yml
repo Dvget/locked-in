@@ -3,7 +3,7 @@ name: Build LOCKED IN IPA
 on:
   workflow_dispatch:
   push:
-    branches: [ main, codex/locked-in-0.7.3 ]
+    branches: [ main ]
     paths: [ '.build-trigger' ]
 
 permissions:
